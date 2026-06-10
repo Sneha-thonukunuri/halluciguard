@@ -1,0 +1,7 @@
+build/
+selfcheckgpt.egg-info
+examples/
+dist/
+*.ipynb_checkpoints/
+venv/
+venv311/
