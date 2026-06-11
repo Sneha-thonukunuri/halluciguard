@@ -1,0 +1,12 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.0.0
+
+torch>=2.0.0
+transformers>=4.35.0
+bert_score>=0.3.13
+spacy>=3.7.0
+nltk
+
+# en_core_web_sm installed separately:
+# python -m spacy download en_core_web_sm
