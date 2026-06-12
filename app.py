@@ -1,23 +1,23 @@
 """
 HalluciGuard — FastAPI backend
-Runs GPT-2 generation + SelfCheckGPT hallucination scoring
+Runs GPT-2 generation + SelfCheckGPT hallucination scoring (ALL methods)
 """
 
 import torch
 import spacy
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Dict
 from transformers import pipeline
 
 from selfcheckgpt.modeling_selfcheck import (
     SelfCheckBERTScore,
     SelfCheckNLI,
-    SelfCheckMQAG,
 )
 
-app = FastAPI(title="HalluciGuard API", version="1.0.0")
+app = FastAPI(title="HalluciGuard API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,42 +40,47 @@ generator = pipeline(
 
 selfcheck_bert = SelfCheckBERTScore(rescale_with_baseline=True)
 selfcheck_nli  = SelfCheckNLI(device=device)
-# SelfCheckMQAG is heavy — uncomment if you have enough RAM/VRAM
-# selfcheck_mqag = SelfCheckMQAG(device=device)
 
 
-# ── Request / Response schemas ────────────────────────────────────────────────
+# ── Schemas ───────────────────────────────────────────────────────────────────
 class AnalyzeRequest(BaseModel):
     prompt: str
     n_samples: int = Field(default=5, ge=1, le=10)
     max_new_tokens: int = Field(default=200, ge=50, le=500)
-    method: Literal["bertscore", "nli", "mqag"] = "bertscore"
 
 
 class SentenceResult(BaseModel):
     sentence: str
-    score: float
+    bertscore: float
+    nli: float
+    combined: float
 
 
 class AnalyzeResponse(BaseModel):
     response: str
     sentences: List[str]
-    scores: List[float]
     sentence_results: List[SentenceResult]
-    avg_score: float
-    method: str
+    # per-method averages
+    avg_bertscore: float
+    avg_nli: float
+    avg_combined: float
+    # per-method sentence scores
+    scores_bertscore: List[float]
+    scores_nli: List[float]
+    scores_combined: List[float]
     n_samples: int
     samples: List[str]
     device: str
 
 
-# ── Endpoints ────────────────────────────────────────────────────────────────
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "device": str(device),
         "gpt2": "loaded",
+        "scorers": ["bertscore", "nli", "combined"],
     }
 
 
@@ -90,7 +95,7 @@ def analyze(req: AnalyzeRequest):
     )
     main_resp = main_out[0]["generated_text"]
 
-    # 2. Generate stochastic samples for consistency check
+    # 2. Generate stochastic samples
     samples = []
     for _ in range(req.n_samples):
         out = generator(
@@ -103,42 +108,46 @@ def analyze(req: AnalyzeRequest):
         )
         samples.append(out[0]["generated_text"])
 
-    # 3. Split main response into sentences with spaCy
+    # 3. Sentence split
     sentences = [
         s.text.strip()
         for s in nlp(main_resp).sents
         if len(s.text.strip()) > 3
     ]
-
     if not sentences:
-        raise HTTPException(status_code=422, detail="Could not extract sentences from generated text.")
+        raise HTTPException(status_code=422, detail="Could not extract sentences.")
 
-    # 4. Score with selected SelfCheckGPT method
-    if req.method == "bertscore":
-        raw_scores = selfcheck_bert.predict(sentences, samples)
+    # 4. Score with ALL methods
+    raw_bert = selfcheck_bert.predict(sentences, samples)
+    raw_nli  = selfcheck_nli.predict(sentences, samples)
 
-    elif req.method == "nli":
-        raw_scores = selfcheck_nli.predict(sentences, samples)
+    scores_bert     = [round(float(s), 4) for s in raw_bert]
+    scores_nli      = [round(float(s), 4) for s in raw_nli]
+    # Combined = average of both
+    scores_combined = [round((b + n) / 2, 4) for b, n in zip(scores_bert, scores_nli)]
 
-    elif req.method == "mqag":
-        # Uncomment selfcheck_mqag above to enable this
-        raise HTTPException(status_code=400, detail="MQAG is disabled by default. Uncomment selfcheck_mqag in app.py to enable it.")
-
-    scores = [round(float(s), 4) for s in raw_scores]
-    avg_score = round(sum(scores) / len(scores), 4)
+    def avg(lst): return round(sum(lst) / len(lst), 4)
 
     sentence_results = [
-        SentenceResult(sentence=s, score=sc)
-        for s, sc in zip(sentences, scores)
+        SentenceResult(
+            sentence=s,
+            bertscore=b,
+            nli=n,
+            combined=c,
+        )
+        for s, b, n, c in zip(sentences, scores_bert, scores_nli, scores_combined)
     ]
 
     return AnalyzeResponse(
         response=main_resp,
         sentences=sentences,
-        scores=scores,
         sentence_results=sentence_results,
-        avg_score=avg_score,
-        method=req.method,
+        avg_bertscore=avg(scores_bert),
+        avg_nli=avg(scores_nli),
+        avg_combined=avg(scores_combined),
+        scores_bertscore=scores_bert,
+        scores_nli=scores_nli,
+        scores_combined=scores_combined,
         n_samples=req.n_samples,
         samples=samples,
         device=str(device),
