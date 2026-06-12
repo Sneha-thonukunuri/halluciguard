@@ -34,7 +34,7 @@ nlp = spacy.load("en_core_web_sm")
 
 generator = pipeline(
     "text-generation",
-    model="gpt2",
+    model="gpt2-medium",
     device=0 if torch.cuda.is_available() else -1,
 )
 
