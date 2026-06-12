@@ -3,514 +3,1738 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HalluciGuard</title>
+  <title>HalluciGuard — Live Hallucination Analysis</title>
+  
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:#0f1117; --bg2:#181c25; --bg3:#1e2230;
-      --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.14);
-      --text:#e8eaf0; --muted:#7a8099;
-      --teal:#1fc98e; --teal-dim:rgba(31,201,142,0.12);
-      --amber:#f5a623; --amber-dim:rgba(245,166,35,0.12);
-      --red:#e05c5c; --red-dim:rgba(224,92,92,0.12);
-      --blue:#5b9cf6; --blue-dim:rgba(91,156,246,0.12);
-      --purple:#a78bfa; --purple-dim:rgba(167,139,250,0.12);
-      --mono:'IBM Plex Mono',monospace; --sans:'Inter',sans-serif;
-      --radius:8px; --radius-lg:12px;
+    /* Reset and Design Variables */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; line-height:1.6; min-height:100vh; }
-    .layout { display:grid; grid-template-columns:260px 1fr; grid-template-rows:56px 1fr; min-height:100vh; }
-
-    /* Topbar */
-    .topbar { grid-column:1/-1; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:12px; }
-    .logo-icon { width:28px; height:28px; background:var(--teal); border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .logo-icon svg { width:16px; height:16px; color:#0f1117; }
-    .logo-text { font-size:16px; font-weight:600; letter-spacing:-0.02em; }
-    .logo-badge { font-size:10px; font-family:var(--mono); background:var(--teal-dim); color:var(--teal); padding:2px 7px; border-radius:999px; border:1px solid rgba(31,201,142,0.2); }
-    .topbar-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
-    .conn-indicator { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
-    .conn-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .3s; }
-    .conn-dot.ok { background:var(--teal); box-shadow:0 0 6px rgba(31,201,142,0.5); }
-    .conn-dot.err { background:var(--red); }
-    .conn-dot.checking { background:var(--amber); animation:pulse .9s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
-
-    /* Sidebar */
-    .sidebar { background:var(--bg2); border-right:1px solid var(--border); padding:20px 16px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; }
-    .sidebar-label { font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:0 4px; margin-bottom:4px; }
-    .sidebar-section { display:flex; flex-direction:column; gap:6px; }
-    .field { display:flex; flex-direction:column; gap:5px; }
-    .field label { font-size:12px; color:var(--muted); padding:0 2px; }
-    .field input, .field select { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--sans); font-size:13px; padding:7px 10px; width:100%; transition:border-color .15s; }
-    .field input:focus, .field select:focus { outline:none; border-color:var(--teal); }
-    .btn-test { background:transparent; border:1px solid var(--border2); border-radius:var(--radius); color:var(--muted); font-size:12px; cursor:pointer; padding:6px 10px; display:flex; align-items:center; gap:5px; transition:all .15s; width:100%; justify-content:center; }
-    .btn-test:hover { border-color:var(--teal); color:var(--teal); }
-    .pipe-steps { display:flex; flex-direction:column; gap:2px; }
-    .pipe-step { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--radius); font-size:12px; color:var(--muted); transition:all .2s; }
-    .pipe-step.active { background:var(--teal-dim); color:var(--teal); }
-    .pipe-step.done { color:var(--teal); }
-    .pipe-step.error { color:var(--red); }
-    .pipe-dot-sm { width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; opacity:0.4; }
-    .pipe-step.active .pipe-dot-sm, .pipe-step.done .pipe-dot-sm { opacity:1; }
-    .history-list { display:flex; flex-direction:column; gap:4px; }
-    .history-item { padding:7px 10px; border-radius:var(--radius); background:var(--bg3); border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; }
-    .history-prompt { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
-    .history-score { font-size:11px; font-family:var(--mono); font-weight:500; flex-shrink:0; }
-    .empty-history { font-size:12px; color:var(--muted); padding:4px 8px; }
-
-    /* Main */
-    .main { display:flex; flex-direction:column; overflow-y:auto; }
-    .main-inner { flex:1; padding:28px 32px; display:flex; flex-direction:column; gap:20px; max-width:920px; width:100%; }
-
-    /* Prompt card */
-    .prompt-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; }
-    .prompt-card textarea { width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--sans); font-size:14px; padding:12px 14px; resize:vertical; min-height:90px; transition:border-color .15s; }
-    .prompt-card textarea:focus { outline:none; border-color:var(--teal); }
-    .prompt-card textarea::placeholder { color:var(--muted); }
-    .prompt-actions { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
-    .btn-analyze { background:var(--teal); border:none; border-radius:var(--radius); color:#0f1117; font-size:14px; font-weight:600; cursor:pointer; padding:9px 22px; display:flex; align-items:center; gap:7px; transition:opacity .15s; }
-    .btn-analyze:hover { opacity:.85; }
-    .btn-analyze:disabled { opacity:.35; cursor:not-allowed; }
-    .btn-export { background:transparent; border:1px solid var(--border2); border-radius:var(--radius); color:var(--muted); font-size:13px; cursor:pointer; padding:8px 14px; display:flex; align-items:center; gap:6px; transition:all .15s; }
-    .btn-export:hover { border-color:var(--blue); color:var(--blue); }
-    .btn-export:disabled { opacity:.3; cursor:not-allowed; }
-    .status-msg { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
-    .spinner { width:12px; height:12px; border:2px solid var(--border2); border-top-color:var(--teal); border-radius:50%; animation:spin .7s linear infinite; display:inline-block; flex-shrink:0; }
-    @keyframes spin { to{transform:rotate(360deg)} }
-    .err-text { font-size:12px; color:var(--red); margin-top:8px; line-height:1.5; white-space:pre-wrap; }
-
-    /* Score cards row */
-    .score-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-    .score-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 18px; transition:border-color .2s; }
-    .score-card.active-method { border-color:var(--teal); }
-    .score-card-label { font-size:10px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:6px; }
-    .score-card-num { font-size:36px; font-weight:600; font-family:var(--mono); line-height:1; }
-    .score-card-verdict { font-size:11px; color:var(--muted); margin-top:4px; }
-    .bar-track { height:4px; border-radius:999px; background:var(--bg3); overflow:hidden; margin-top:10px; }
-    .bar-fill { height:100%; border-radius:999px; transition:width .9s cubic-bezier(.4,0,.2,1); }
-
-    /* Results card */
-    .results-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; }
-    .tabs { display:flex; border-bottom:1px solid var(--border); background:var(--bg3); }
-    .tab { padding:11px 18px; font-size:13px; color:var(--muted); cursor:pointer; border:none; background:none; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .15s; }
-    .tab:hover { color:var(--text); }
-    .tab.on { color:var(--teal); border-bottom-color:var(--teal); }
-    .tab-body { padding:20px; }
-
-    /* Metrics */
-    .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:16px; }
-    .metric { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; }
-    .metric-label { font-size:10px; color:var(--muted); margin-bottom:4px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.05em; }
-    .metric-value { font-size:16px; font-weight:600; font-family:var(--mono); }
-
-    /* Sentence table */
-    .sent-table { width:100%; border-collapse:collapse; }
-    .sent-table th { font-size:10px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
-    .sent-table td { padding:10px 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:top; }
-    .sent-table tr:last-child td { border-bottom:none; }
-    .sent-table tr:hover td { background:var(--bg3); }
-    .score-pill { font-size:11px; font-family:var(--mono); font-weight:500; padding:3px 8px; border-radius:999px; white-space:nowrap; }
-    .sent-border { width:3px; border-radius:2px; min-height:20px; display:inline-block; margin-right:8px; vertical-align:middle; flex-shrink:0; }
-
-    /* Samples */
-    .sample-block { margin-bottom:14px; }
-    .sample-num { font-size:10px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:6px; }
-    .resp-box { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-size:13px; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
-
-    ::-webkit-scrollbar { width:6px; height:6px; }
-    ::-webkit-scrollbar-track { background:transparent; }
-    ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
-
-    @media(max-width:700px) {
-      .layout { grid-template-columns:1fr; }
-      .sidebar { border-right:none; border-bottom:1px solid var(--border); }
-      .main-inner { padding:16px; }
-      .score-row { grid-template-columns:1fr; }
+    
+    :root {
+      --bg-app: #060913;
+      --bg-card: #0f1422;
+      --bg-card-hover: #131a2e;
+      --bg-input: #141b2c;
+      
+      --border-light: rgba(255, 255, 255, 0.05);
+      --border-glow: rgba(99, 102, 241, 0.25);
+      
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+      
+      --color-primary: #6366f1;
+      --color-purple-start: #6366f1;
+      --color-purple-end: #a855f7;
+      
+      --color-green: #10b981;
+      --color-yellow: #f59e0b;
+      --color-red: #ef4444;
+      
+      --color-green-dim: rgba(16, 185, 129, 0.08);
+      --color-yellow-dim: rgba(245, 158, 11, 0.08);
+      --color-red-dim: rgba(239, 68, 68, 0.08);
+      
+      --font-sans: 'Inter', sans-serif;
+      --font-display: 'Outfit', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+      
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+    
+    body {
+      background: var(--bg-app);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    
+    /* App Container Layout */
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    
+    /* Top Navigation Bar */
+    .navbar {
+      background: rgba(15, 20, 34, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      height: 70px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    .navbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+    
+    .logo-shield-container {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--color-purple-start), var(--color-purple-end));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+    }
+    
+    .logo-shield-container svg {
+      width: 18px;
+      height: 18px;
+      color: #ffffff;
+    }
+    
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #ffffff;
+    }
+    
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+    
+    .nav-link {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s ease;
+      cursor: pointer;
+    }
+    
+    .nav-link:hover, .nav-link.active {
+      color: #ffffff;
+    }
+    
+    .nav-link.active {
+      position: relative;
+    }
+    
+    .btn-try-demo {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: #ffffff;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15));
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      padding: 9px 22px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 10px rgba(168, 85, 247, 0.05);
+    }
+    
+    .btn-try-demo:hover {
+      background: linear-gradient(135deg, var(--color-purple-start), var(--color-purple-end));
+      box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);
+      transform: translateY(-1px);
+    }
+    
+    .btn-try-demo:active {
+      transform: translateY(0);
+    }
+    
+    /* Main Content */
+    .main-body {
+      flex: 1;
+      padding: 40px 80px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+    
+    /* Banner / Page Header */
+    .banner {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .badge-demo {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #60a5fa;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    
+    .banner h1 {
+      font-family: var(--font-display);
+      font-size: 36px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+    
+    .banner p {
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+    
+    /* Workspace Columns Grid */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+    
+    /* Left Panel Card and Inputs */
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    
+    .control-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .card-label {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .textarea-wrapper {
+      position: relative;
+    }
+    
+    .control-card textarea {
+      width: 100%;
+      min-height: 120px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      padding: 14px 16px;
+      resize: vertical;
+      outline: none;
+      transition: all 0.2s ease;
+      line-height: 1.6;
+    }
+    
+    .control-card textarea:focus {
+      border-color: var(--color-purple-start);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    
+    .control-card textarea::placeholder {
+      color: var(--text-muted);
+    }
+    
+    /* Select Styling */
+    .select-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    
+    .select-wrapper select {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      padding: 12px 16px;
+      outline: none;
+      cursor: pointer;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      transition: all 0.2s ease;
+    }
+    
+    .select-wrapper select:focus {
+      border-color: var(--color-purple-start);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    
+    .select-wrapper::after {
+      content: '';
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--text-secondary);
+      border-bottom: 2px solid var(--text-secondary);
+      transform: translateY(-70%) rotate(45deg);
+      pointer-events: none;
+    }
+    
+    /* Slider Custom Styling */
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    
+    .slider-header .card-label {
+      margin-bottom: 0;
+    }
+    
+    .slider-val-display {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: #60a5fa;
+    }
+    
+    /* Range input resets */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      outline: none;
+      margin: 12px 0 6px 0;
+      transition: background 0.1s ease;
+    }
+    
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: transparent;
+      border-radius: 999px;
+    }
+    
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 2px solid var(--color-purple-end);
+      cursor: pointer;
+      margin-top: -5px;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+    
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+      background: var(--color-purple-end);
+    }
+    
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      padding: 0 2px;
+    }
+    
+    /* Analyze Button with animations */
+    .btn-analyze {
+      position: relative;
+      width: 100%;
+      background: linear-gradient(135deg, var(--color-purple-start) 0%, var(--color-purple-end) 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 16px rgba(168, 85, 247, 0.25);
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .btn-analyze::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -50%;
+      width: 200%;
+      height: 100%;
+      background: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.25) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      transform: skewX(-25deg);
+      transition: 0.8s;
+      opacity: 0;
+    }
+    
+    .btn-analyze:hover::after {
+      left: 125%;
+      opacity: 1;
+    }
+    
+    .btn-analyze:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(168, 85, 247, 0.45);
+    }
+    
+    .btn-analyze:active:not(:disabled) {
+      transform: scale(0.975);
+    }
+    
+    .btn-analyze:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    
+    .btn-play-icon {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    
+    /* Secondary/Export Buttons */
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 8px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-secondary:hover:not(:disabled) {
+      border-color: #60a5fa;
+      color: #60a5fa;
+      background: rgba(96, 165, 250, 0.05);
+    }
+    
+    .btn-secondary:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+    
+    .btn-secondary:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    
+    /* Collapsible Developer Settings */
+    .dev-settings-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .dev-settings-header {
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      user-select: none;
+      transition: background 0.2s, color 0.2s;
+    }
+    
+    .dev-settings-header:hover {
+      background: rgba(255, 255, 255, 0.02);
+      color: #ffffff;
+    }
+    
+    .dev-chevron-icon {
+      width: 14px;
+      height: 14px;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      color: var(--text-secondary);
+    }
+    
+    .dev-settings-card.expanded .dev-chevron-icon {
+      transform: rotate(180deg);
+    }
+    
+    .dev-settings-content {
+      padding: 0 20px;
+      max-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
+    }
+    
+    .dev-settings-card.expanded .dev-settings-content {
+      padding: 0 20px 20px 20px;
+      max-height: 480px; /* arbitrary limit */
+    }
+    
+    .dev-settings-content .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .dev-settings-content label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .dev-settings-content input {
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    
+    .dev-settings-content input:focus {
+      border-color: var(--color-purple-start);
+    }
+    
+    /* Connection Indicator */
+    .conn-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-top: 1px solid var(--border-light);
+      font-size: 12px;
+    }
+    
+    .conn-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+    }
+    
+    .conn-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    
+    .conn-dot.ok {
+      background: var(--color-green);
+      box-shadow: 0 0 8px var(--color-green);
+    }
+    
+    .conn-dot.err {
+      background: var(--color-red);
+      box-shadow: 0 0 8px var(--color-red);
+    }
+    
+    .conn-dot.checking {
+      background: var(--color-yellow);
+      animation: pulse 1s infinite alternate;
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 0.3; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1.1); }
+    }
+    
+    /* Pipeline steps in left panel when running */
+    .pipeline-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      animation: slideDownFadeIn 0.3s ease;
+    }
+    
+    @keyframes slideDownFadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .pipeline-title {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+    
+    .pipe-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .pipe-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      transition: color 0.3s ease, font-weight 0.3s ease;
+    }
+    
+    .pipe-step.active {
+      color: var(--color-purple-end);
+      font-weight: 500;
+    }
+    
+    .pipe-step.done {
+      color: var(--color-green);
+    }
+    
+    .pipe-step.error {
+      color: var(--color-red);
+    }
+    
+    .pipe-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+      flex-shrink: 0;
+      opacity: 0.4;
+      transition: opacity 0.3s;
+    }
+    
+    .pipe-step.active .pipe-dot, .pipe-step.done .pipe-dot, .pipe-step.error .pipe-dot {
+      opacity: 1;
+    }
+    
+    /* Status Msg Spinner */
+    .status-msg {
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: var(--color-purple-end);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .err-text {
+      background: var(--color-red-dim);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: var(--radius-sm);
+      color: var(--color-red);
+      font-size: 12px;
+      padding: 10px 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    
+    /* Pipeline History */
+    .sidebar-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 6px;
+    }
+    
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .history-item {
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .history-prompt {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-grow: 1;
+    }
+    
+    .history-score {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    
+    .empty-history {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 2px 0;
+    }
+    
+    /* Right Panel and Metrics Output */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    
+    /* Score metrics cards row */
+    .score-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    
+    .score-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.3s;
+    }
+    
+    .score-card-label {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+    
+    .score-card-num {
+      font-family: var(--font-display);
+      font-size: 40px;
+      font-weight: 600;
+      line-height: 1;
+      margin-bottom: 16px;
+      transition: color 0.5s ease;
+    }
+    
+    .score-card-verdict {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 2px;
+    }
+    
+    .bar-track {
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+    }
+    
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      width: 0%;
+      transition: width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    /* Results Card */
+    .results-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Tabs Header with Action Buttons */
+    .results-header-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(15, 20, 34, 0.5);
+      border-bottom: 1px solid var(--border-light);
+      padding: 0 24px;
+      height: 52px;
+    }
+    
+    .tabs {
+      display: flex;
+      height: 100%;
+      gap: 6px;
+    }
+    
+    .tab {
+      padding: 0 16px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      margin-bottom: -1px;
+      transition: all 0.2s ease;
+    }
+    
+    .tab:hover {
+      color: #ffffff;
+    }
+    
+    .tab.on {
+      color: #ffffff;
+      border-bottom-color: var(--color-purple-start);
+      font-weight: 600;
+    }
+    
+    .export-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .tab-body {
+      padding: 24px;
+    }
+    
+    /* Overview Tab content */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .metric {
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .metric-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .response-section-title {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    
+    .resp-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #e2e8f0;
+    }
+    
+    /* Sentence rows inside tab sentences */
+    .sentence-list {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .sentence-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+    
+    .sentence-row:first-child {
+      padding-top: 0;
+    }
+    
+    .sentence-row:last-child {
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    
+    .sentence-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .badge {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid currentColor;
+      min-width: 54px;
+    }
+    
+    .badge-low {
+      color: var(--color-green);
+      background: var(--color-green-dim);
+    }
+    
+    .badge-med {
+      color: var(--color-yellow);
+      background: var(--color-yellow-dim);
+    }
+    
+    .badge-high {
+      color: var(--color-red);
+      background: var(--color-red-dim);
+    }
+    
+    .sentence-text {
+      color: var(--text-primary);
+      font-size: 14px;
+      flex-grow: 1;
+      line-height: 1.6;
+    }
+    
+    .sentence-percentage {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+    
+    .sentence-bar-track {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-left: 0;
+    }
+    
+    .sentence-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      width: 0%;
+      transition: width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    .sentence-bar-fill.fill-green {
+      background: var(--color-green);
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.25);
+    }
+    
+    .sentence-bar-fill.fill-yellow {
+      background: var(--color-yellow);
+      box-shadow: 0 0 6px rgba(245, 158, 11, 0.25);
+    }
+    
+    .sentence-bar-fill.fill-red {
+      background: var(--color-red);
+      box-shadow: 0 0 6px rgba(239, 68, 68, 0.25);
+    }
+    
+    /* Samples blocks */
+    .sample-block {
+      margin-bottom: 20px;
+    }
+    
+    .sample-block:last-child {
+      margin-bottom: 0;
+    }
+    
+    .sample-num {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    
+    /* Media Queries */
+    @media(max-width: 1024px) {
+      .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+      .main-body {
+        padding: 24px 30px;
+      }
+      .navbar {
+        padding: 0 24px;
+      }
+    }
+    
+    @media(max-width: 700px) {
+      .score-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+      .metrics {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
   </style>
 </head>
 <body>
-<div class="layout">
+<div class="app-container">
 
-  <!-- Topbar -->
-  <header class="topbar">
-    <div class="logo-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>
-      </svg>
-    </div>
-    <span class="logo-text">HalluciGuard</span>
-    <span class="logo-badge">v2.0</span>
-    <div class="topbar-right">
-      <div class="conn-indicator">
-        <div class="conn-dot" id="connDot"></div>
-        <span id="connLabel">not connected</span>
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <a href="#" class="navbar-logo">
+      <div class="logo-shield-container">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
-    </div>
+      <span class="logo-text">HalluciGuard</span>
+    </a>
   </header>
 
-  <!-- Sidebar -->
-  <aside class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">Backend</div>
-      <div class="field">
-        <label>Server URL</label>
-        <input type="url" id="backendUrl" value="http://localhost:8000" />
-      </div>
-      <button class="btn-test" onclick="testConnection()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
-        Test connection
-      </button>
+  <!-- Main Grid Workspace -->
+  <main class="main-body">
+    
+    <!-- Banner Title -->
+    <div class="banner">
+      <span class="badge-demo">Demo</span>
+      <h1>Live Hallucination Analysis</h1>
+      <p>Enter a prompt and inspect cross-sample consistency in real time.</p>
     </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-label">Parameters</div>
-      <div class="field">
-        <label>Samples</label>
-        <select id="nSamples">
-          <option value="3">3 samples</option>
-          <option value="5" selected>5 samples</option>
-          <option value="7">7 samples</option>
-          <option value="10">10 samples</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Max tokens</label>
-        <select id="maxTokens">
-          <option value="100">100</option>
-          <option value="200" selected>200</option>
-          <option value="300">300</option>
-          <option value="500">500</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-label">Pipeline</div>
-      <div class="pipe-steps">
-        <div class="pipe-step" id="ps0"><div class="pipe-dot-sm"></div>Prompt received</div>
-        <div class="pipe-step" id="ps1"><div class="pipe-dot-sm"></div>GPT-2 generating</div>
-        <div class="pipe-step" id="ps2"><div class="pipe-dot-sm"></div>Sampling responses</div>
-        <div class="pipe-step" id="ps3"><div class="pipe-dot-sm"></div>BERTScore scoring</div>
-        <div class="pipe-step" id="ps4"><div class="pipe-dot-sm"></div>NLI scoring</div>
-        <div class="pipe-step" id="ps5"><div class="pipe-dot-sm"></div>Results ready</div>
-      </div>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-label">History</div>
-      <div class="history-list" id="historyList">
-        <div class="empty-history">No analyses yet</div>
-      </div>
-    </div>
-  </aside>
-
-  <!-- Main -->
-  <main class="main">
-    <div class="main-inner">
-
-      <!-- Prompt -->
-      <div class="prompt-card">
-        <textarea id="promptInput" placeholder="Enter a prompt for GPT-2, e.g. &quot;The Eiffel Tower was built in Paris in 1889&quot;"></textarea>
-        <div class="prompt-actions">
+    
+    <div class="workspace-grid">
+      
+      <!-- Left Column (Parameters and inputs) -->
+      <div class="left-panel">
+        
+        <div class="control-card">
+          <!-- Prompt area -->
+          <div class="field">
+            <label class="card-label" for="promptInput">Prompt</label>
+            <div class="textarea-wrapper">
+              <textarea id="promptInput" placeholder="When was the Eiffel Tower completed and who designed it?"></textarea>
+            </div>
+          </div>
+          
+          <!-- Model dropdown -->
+          <div class="field">
+            <label class="card-label" for="modelSelect">Model</label>
+            <div class="select-wrapper">
+              <select id="modelSelect">
+                <option value="gpt2" selected>GPT-2 (Local Inference)</option>
+                <option value="gpt4" disabled>GPT-4 (Locked)</option>
+                <option value="gpt35" disabled>GPT-3.5-Turbo (Locked)</option>
+              </select>
+            </div>
+          </div>
+          
+          <!-- Samples slider -->
+          <div class="field">
+            <div class="slider-header">
+              <label class="card-label" for="nSamples">Number of samples</label>
+              <span id="sliderVal" class="slider-val-display">5</span>
+            </div>
+            <input type="range" id="nSamples" min="1" max="20" value="5">
+            <div class="slider-labels">
+              <span>1</span>
+              <span>20</span>
+            </div>
+          </div>
+          
+          <!-- Action Button -->
           <button class="btn-analyze" id="runBtn" onclick="runPipeline()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <svg class="btn-play-icon" viewBox="0 0 24 24">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
             Analyze
           </button>
-          <button class="btn-export" id="exportJsonBtn" onclick="exportJSON()" disabled>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Export JSON
-          </button>
-          <button class="btn-export" id="exportCsvBtn" onclick="exportCSV()" disabled>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Export CSV
-          </button>
+          
+          <!-- Status or error display -->
           <div class="status-msg" id="statusMsg"></div>
+          <div class="err-text" id="errMsg" style="display:none"></div>
         </div>
-        <div class="err-text" id="errMsg" style="display:none"></div>
-      </div>
-
-      <!-- Score cards — all 3 methods -->
-      <div class="score-row" id="scoreRow" style="display:none">
-        <div class="score-card" id="cardBert">
-          <div class="score-card-label">BERTScore</div>
-          <div class="score-card-num" id="numBert">—</div>
-          <div class="score-card-verdict" id="verdBert"></div>
-          <div class="bar-track"><div class="bar-fill" id="barBert" style="width:0%"></div></div>
-        </div>
-        <div class="score-card" id="cardNli">
-          <div class="score-card-label">NLI — DeBERTa</div>
-          <div class="score-card-num" id="numNli">—</div>
-          <div class="score-card-verdict" id="verdNli"></div>
-          <div class="bar-track"><div class="bar-fill" id="barNli" style="width:0%"></div></div>
-        </div>
-        <div class="score-card" id="cardCombined">
-          <div class="score-card-label">Combined</div>
-          <div class="score-card-num" id="numCombined">—</div>
-          <div class="score-card-verdict" id="verdCombined"></div>
-          <div class="bar-track"><div class="bar-fill" id="barCombined" style="width:0%"></div></div>
-        </div>
-      </div>
-
-      <!-- Results tabs -->
-      <div class="results-card" id="resultsCard" style="display:none">
-        <div class="tabs">
-          <button class="tab on" onclick="switchTab('overview',this)">Overview</button>
-          <button class="tab" onclick="switchTab('sentences',this)">Sentences</button>
-          <button class="tab" onclick="switchTab('samples',this)">Samples</button>
-        </div>
-
-        <div class="tab-body" id="tab-overview">
-          <div class="metrics">
-            <div class="metric"><div class="metric-label">Sentences</div><div class="metric-value" id="mSent">—</div></div>
-            <div class="metric"><div class="metric-label">Samples</div><div class="metric-value" id="mSamp">—</div></div>
-            <div class="metric"><div class="metric-label">Flagged (BERT)</div><div class="metric-value" id="mFlagBert">—</div></div>
-            <div class="metric"><div class="metric-label">Flagged (NLI)</div><div class="metric-value" id="mFlagNli">—</div></div>
-            <div class="metric"><div class="metric-label">Device</div><div class="metric-value" id="mDevice" style="font-size:13px">—</div></div>
+        
+        <!-- Pipeline steps card (Shown during run) -->
+        <div class="pipeline-card" id="pipelineCard" style="display: none;">
+          <div class="pipeline-title">In-Progress Steps</div>
+          <div class="pipe-steps">
+            <div class="pipe-step" id="ps0"><div class="pipe-dot"></div>Prompt received</div>
+            <div class="pipe-step" id="ps1"><div class="pipe-dot"></div>GPT-2 generating response</div>
+            <div class="pipe-step" id="ps2"><div class="pipe-dot"></div>Sampling stochastic paths</div>
+            <div class="pipe-step" id="ps3"><div class="pipe-dot"></div>BERTScore evaluation</div>
+            <div class="pipe-step" id="ps4"><div class="pipe-dot"></div>NLI logical consistency check</div>
+            <div class="pipe-step" id="ps5"><div class="pipe-dot"></div>Results generated</div>
           </div>
-          <div class="sample-num" style="margin-bottom:8px">GPT-2 Generated Response</div>
-          <div class="resp-box" id="respBox"></div>
+        </div>
+        
+        <!-- Server Status — always visible -->
+        <div class="control-card" style="padding: 16px 20px; flex-direction: row; align-items: center; justify-content: space-between;">
+          <div class="conn-indicator">
+            <div class="conn-dot" id="connDot"></div>
+            <span id="connLabel" style="font-size:13px;">Not Checked</span>
+          </div>
+          <button class="btn-secondary" onclick="testConnection()" style="padding: 7px 14px;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            Ping Server
+          </button>
         </div>
 
-        <div class="tab-body" id="tab-sentences" style="display:none">
-          <table class="sent-table">
-            <thead>
-              <tr>
-                <th style="width:45%">Sentence</th>
-                <th>BERTScore</th>
-                <th>NLI</th>
-                <th>Combined</th>
-              </tr>
-            </thead>
-            <tbody id="sentTableBody"></tbody>
-          </table>
-        </div>
+        <!-- Expandable Developer settings -->
+        <div class="dev-settings-card" id="devSettingsCard">
+          <div class="dev-settings-header" onclick="toggleDevSettings()">
+            <span>Advanced Server Settings</span>
+            <svg class="dev-chevron-icon" id="devChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="dev-settings-content" id="devSettingsContent">
+            <div class="field">
+              <label for="backendUrl">Server Endpoint URL</label>
+              <input type="url" id="backendUrl" value="http://localhost:8000" />
+            </div>
+            <div class="field">
+              <label for="maxTokens">Max Tokens Limit</label>
+              <div class="select-wrapper">
+                <select id="maxTokens">
+                  <option value="100">100 tokens</option>
+                  <option value="200" selected>200 tokens</option>
+                  <option value="300">300 tokens</option>
+                  <option value="500">500 tokens</option>
+                </select>
+              </div>
+            </div>
 
-        <div class="tab-body" id="tab-samples" style="display:none">
-          <div id="sampList"></div>
+            <div class="sidebar-label">Pipeline History</div>
+            <div class="history-list" id="historyList">
+              <div class="empty-history">No analyses run yet.</div>
+            </div>
+          </div>
         </div>
+        
       </div>
-
+      
+      <!-- Right Column (Outputs and reports) -->
+      <div class="right-panel">
+        
+        <!-- Score summaries -->
+        <div class="score-row" id="scoreRow" style="display:none">
+          
+          <div class="score-card" id="cardConsistency">
+            <div class="score-card-label">Consistency</div>
+            <div class="score-card-num" id="numConsistency">—</div>
+            <div class="score-card-verdict" id="verdConsistency">Highly consistent</div>
+            <div class="bar-track"><div class="bar-fill" id="barConsistency" style="width:0%"></div></div>
+          </div>
+          
+          <div class="score-card" id="cardRisk">
+            <div class="score-card-label">Hallucination Risk</div>
+            <div class="score-card-num" id="numRisk">—</div>
+            <div class="score-card-verdict" id="verdRisk">Extremely low</div>
+            <div class="bar-track"><div class="bar-fill" id="barRisk" style="width:0%"></div></div>
+          </div>
+          
+          <div class="score-card" id="cardConfidence">
+            <div class="score-card-label">Confidence</div>
+            <div class="score-card-num" id="numConfidence">—</div>
+            <div class="score-card-verdict" id="verdConfidence">High alignment</div>
+            <div class="bar-track"><div class="bar-fill" id="barConfidence" style="width:0%"></div></div>
+          </div>
+          
+        </div>
+        
+        <!-- Detail results card -->
+        <div class="results-card" id="resultsCard" style="display:none">
+          <!-- Header and tabs actions -->
+          <div class="results-header-actions">
+            <div class="tabs">
+              <button class="tab on" id="tab-btn-sentences" onclick="switchTab('sentences')">Sentence Analysis</button>
+              <button class="tab" id="tab-btn-samples" onclick="switchTab('samples')">Stochastic Samples</button>
+              <button class="tab" id="tab-btn-overview" onclick="switchTab('overview')">Raw Output</button>
+            </div>
+            <div class="export-actions">
+              <button class="btn-secondary" id="exportJsonBtn" onclick="exportJSON()" disabled>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                JSON
+              </button>
+              <button class="btn-secondary" id="exportCsvBtn" onclick="exportCSV()" disabled>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                CSV
+              </button>
+            </div>
+          </div>
+          
+          <!-- Sentence Analysis panel -->
+          <div class="tab-body" id="panel-sentences">
+            <div class="sentence-list" id="sentTableBody"></div>
+          </div>
+          
+          <!-- Stochastic Samples panel -->
+          <div class="tab-body" id="panel-samples" style="display:none">
+            <div id="sampList"></div>
+          </div>
+          
+          <!-- Raw Output panel -->
+          <div class="tab-body" id="panel-overview" style="display:none">
+            <div class="metrics">
+              <div class="metric"><div class="metric-label">Sentences</div><div class="metric-value" id="mSent">—</div></div>
+              <div class="metric"><div class="metric-label">Samples</div><div class="metric-value" id="mSamp">—</div></div>
+              <div class="metric"><div class="metric-label">Mean BERT</div><div class="metric-value" id="mMeanBert">—</div></div>
+              <div class="metric"><div class="metric-label">Mean NLI</div><div class="metric-value" id="mMeanNli">—</div></div>
+            </div>
+            <div class="response-section-title">GPT-2 Response</div>
+            <div class="resp-box" id="respBox"></div>
+          </div>
+          
+        </div>
+        
+      </div>
+      
     </div>
+    
   </main>
 </div>
 
 <script>
   let lastResult = null;
   const history = [];
+  
+  // Initialize slider tracks
+  const slider = document.getElementById('nSamples');
+  const sliderVal = document.getElementById('sliderVal');
+
+  function updateSliderValue(val) {
+    sliderVal.textContent = val;
+    const min = parseInt(slider.min) || 1;
+    const max = parseInt(slider.max) || 20;
+    const percentage = (parseInt(val) - min) / (max - min) * 100;
+    // Purple fill gradient
+    slider.style.background = `linear-gradient(to right, #6366f1 0%, #a855f7 ${percentage}%, #141b2c ${percentage}%, #141b2c 100%)`;
+  }
+
+  slider.addEventListener('input', (e) => {
+    updateSliderValue(e.target.value);
+  });
+  
+  // Initialize default range background
+  updateSliderValue(slider.value);
+  
+  // Developer Settings Collapse Toggle
+  function toggleDevSettings() {
+    const card = document.getElementById('devSettingsCard');
+    card.classList.toggle('expanded');
+  }
 
   function setConn(state, label) {
     document.getElementById('connDot').className = 'conn-dot ' + state;
     document.getElementById('connLabel').textContent = label;
   }
-  function setPipe(i, state) { document.getElementById('ps'+i).className = 'pipe-step '+state; }
-  function resetPipe() { for(let i=0;i<6;i++) setPipe(i,''); }
-  function setStatus(html) { document.getElementById('statusMsg').innerHTML = html; }
-  function showErr(msg) { const e=document.getElementById('errMsg'); e.style.display=msg?'':'none'; e.textContent=msg; }
-
-  function switchTab(name, el) {
-    ['overview','sentences','samples'].forEach(t => {
-      document.getElementById('tab-'+t).style.display = t===name?'':'none';
+  
+  function setPipe(i, state) {
+    const el = document.getElementById('ps' + i);
+    if(el) el.className = 'pipe-step ' + state;
+  }
+  
+  function resetPipe() {
+    for(let i=0; i<6; i++) setPipe(i, '');
+  }
+  
+  function setStatus(html) {
+    document.getElementById('statusMsg').innerHTML = html;
+  }
+  
+  function showErr(msg) {
+    const e = document.getElementById('errMsg');
+    e.style.display = msg ? '' : 'none';
+    e.textContent = msg;
+  }
+  
+  function switchTab(name) {
+    ['sentences', 'samples', 'overview'].forEach(t => {
+      document.getElementById('panel-' + t).style.display = t === name ? '' : 'none';
+      const btn = document.getElementById('tab-btn-' + t);
+      if (btn) {
+        if (t === name) {
+          btn.classList.add('on');
+        } else {
+          btn.classList.remove('on');
+        }
+      }
     });
-    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
-    el.classList.add('on');
   }
 
-  function scoreColor(s) {
-    if(s < 0.35) return '#1fc98e';
-    if(s < 0.6)  return '#f5a623';
-    return '#e05c5c';
+  // Color mappings based on scores/percentages
+  function getScoreColor(valPercent) {
+    if (valPercent >= 70) return '#10b981'; // Green
+    if (valPercent >= 53) return '#f59e0b'; // Yellow
+    return '#ef4444'; // Red
   }
-  function verdict(s) {
-    if(s < 0.25) return 'Highly consistent';
-    if(s < 0.45) return 'Mostly consistent';
-    if(s < 0.65) return 'Possibly hallucinated';
+  
+  function getRiskColor(riskPercent) {
+    if (riskPercent <= 30) return '#10b981'; // Green
+    if (riskPercent <= 47) return '#f59e0b'; // Yellow
+    return '#ef4444'; // Red
+  }
+  
+  function getVerdictText(consistencyPercent) {
+    if (consistencyPercent >= 85) return 'Highly consistent';
+    if (consistencyPercent >= 70) return 'Mostly consistent';
+    if (consistencyPercent >= 53) return 'Possibly hallucinated';
     return 'Likely hallucinated';
   }
-  function pillStyle(s) {
-    if(s < 0.35) return {bg:'rgba(31,201,142,.15)',color:'#1fc98e',label:'Consistent'};
-    if(s < 0.6)  return {bg:'rgba(245,166,35,.15)', color:'#f5a623',label:'Uncertain'};
-    return              {bg:'rgba(224,92,92,.15)',  color:'#e05c5c',label:'Hallucinated'};
+  
+  function getRiskVerdictText(riskPercent) {
+    if (riskPercent <= 25) return 'Extremely low risk';
+    if (riskPercent <= 40) return 'Minor anomalies';
+    if (riskPercent <= 55) return 'Moderate risk';
+    return 'Critical risk';
+  }
+  
+  function getConfidenceVerdictText(confidencePercent) {
+    if (confidencePercent >= 90) return 'High model alignment';
+    if (confidencePercent >= 80) return 'Moderate agreement';
+    return 'Low logical alignment';
+  }
+  
+  // Numerical count-up micro-animation
+  function animateCountUp(element, target, duration = 1200) {
+    let start = 0;
+    const startTime = performance.now();
+    
+    function update(currentTime) {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Bouncy ease-out
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      const currentVal = Math.round(start + easeProgress * (target - start));
+      
+      element.textContent = currentVal + '%';
+      
+      if (progress < 1) {
+        requestAnimationFrame(update);
+      } else {
+        element.textContent = target + '%';
+      }
+    }
+    requestAnimationFrame(update);
   }
 
-  function setScoreCard(prefix, score) {
-    const pct = Math.round(score*100);
-    const col = scoreColor(score);
-    document.getElementById('num'+prefix).textContent = pct+'%';
-    document.getElementById('num'+prefix).style.color = col;
-    document.getElementById('verd'+prefix).textContent = verdict(score);
-    document.getElementById('bar'+prefix).style.width = pct+'%';
-    document.getElementById('bar'+prefix).style.background = col;
+  function setMetricCard(idNum, idBar, idVerdict, targetVal, colorFunc, verdictFunc) {
+    const numEl = document.getElementById(idNum);
+    const barEl = document.getElementById(idBar);
+    const verdEl = document.getElementById(idVerdict);
+    
+    // Trigger count up animation
+    animateCountUp(numEl, targetVal);
+    
+    // Set color matching metric
+    const color = colorFunc(targetVal);
+    numEl.style.color = color;
+    
+    // Trigger progress bar transitions after a small frame tick
+    setTimeout(() => {
+      barEl.style.width = targetVal + '%';
+      barEl.style.background = color;
+    }, 50);
+    
+    // Set verdict
+    verdEl.textContent = verdictFunc(targetVal);
   }
 
   async function testConnection() {
     const url = document.getElementById('backendUrl').value.trim();
-    setConn('checking','checking…');
+    setConn('checking', 'Checking connection…');
     try {
-      const res = await fetch(url+'/health', {signal:AbortSignal.timeout(5000)});
-      if(res.ok) {
+      const res = await fetch(url + '/health', { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
         const d = await res.json();
-        setConn('ok', `connected · ${d.device} · ${(d.scorers||[]).join(', ')}`);
+        setConn('ok', `Online · Device: ${d.device}`);
       } else {
-        setConn('err','server error '+res.status);
+        setConn('err', `Server Error: ${res.status}`);
       }
-    } catch { setConn('err','cannot reach server'); }
+    } catch (e) {
+      setConn('err', 'Cannot connect');
+    }
   }
 
   async function runPipeline() {
     const prompt = document.getElementById('promptInput').value.trim();
-    if(!prompt) { showErr('Please enter a prompt.'); return; }
-    const url       = document.getElementById('backendUrl').value.trim();
-    const nSamples  = parseInt(document.getElementById('nSamples').value);
+    if (!prompt) {
+      showErr('Please enter a prompt.');
+      return;
+    }
+    const url = document.getElementById('backendUrl').value.trim();
+    const nSamples = parseInt(document.getElementById('nSamples').value);
     const maxTokens = parseInt(document.getElementById('maxTokens').value);
 
     const btn = document.getElementById('runBtn');
     btn.disabled = true;
+    
+    // Visual resets
     document.getElementById('scoreRow').style.display = 'none';
     document.getElementById('resultsCard').style.display = 'none';
     document.getElementById('exportJsonBtn').disabled = true;
     document.getElementById('exportCsvBtn').disabled = true;
-    showErr(''); resetPipe();
+    showErr('');
+    resetPipe();
+    
+    // Display in-progress pipeline card
+    const pipeCard = document.getElementById('pipelineCard');
+    pipeCard.style.display = 'flex';
 
     const steps = [
-      'Sending prompt…',
-      'GPT-2 generating response…',
-      'Generating '+nSamples+' stochastic samples…',
-      'Running BERTScore…',
-      'Running NLI (DeBERTa)…',
-      'Computing combined scores…',
+      'Reading input prompt…',
+      'Generating base greedy token response…',
+      'Generating ' + nSamples + ' comparative stochastic samples…',
+      'Calculating BERTScore semantic drift…',
+      'Logical NLI inconsistency check…',
+      'Consolidating final consistency indexes…',
     ];
+    
     let step = 0;
     function nextStep() {
-      if(step>0) setPipe(step-1,'done');
-      if(step<6) { setPipe(step,'active'); setStatus(`<span class="spinner"></span> ${steps[step]}`); step++; }
+      if (step > 0) setPipe(step - 1, 'done');
+      if (step < 6) {
+        setPipe(step, 'active');
+        setStatus(`<span class="spinner"></span> ${steps[step]}`);
+        step++;
+      }
     }
     nextStep();
-    const timer = setInterval(()=>{ if(step<6) nextStep(); else clearInterval(timer); }, 2500);
+    
+    // Visual progress updater loop
+    const timer = setInterval(() => {
+      if (step < 6) {
+        nextStep();
+      } else {
+        clearInterval(timer);
+      }
+    }, 2500);
 
     try {
-      const res = await fetch(url+'/analyze', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({prompt, n_samples:nSamples, max_new_tokens:maxTokens}),
+      const res = await fetch(url + '/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, n_samples: nSamples, max_new_tokens: maxTokens }),
       });
+      
       clearInterval(timer);
-      if(!res.ok) { const t=await res.text(); throw new Error(`Server ${res.status}: ${t}`); }
+      
+      if (!res.ok) {
+        const textErr = await res.text();
+        throw new Error(`Server Error (${res.status}): ${textErr}`);
+      }
+      
       const data = await res.json();
-      for(let i=0;i<6;i++) setPipe(i,'done');
+      
+      for (let i = 0; i < 6; i++) setPipe(i, 'done');
       setStatus('');
+      
+      // Slide pipeline card out after short delay
+      setTimeout(() => {
+        pipeCard.style.display = 'none';
+      }, 1000);
+      
       lastResult = data;
       renderResults(data, prompt);
-    } catch(e) {
+      
+    } catch (e) {
       clearInterval(timer);
-      for(let i=0;i<6;i++) { if(document.getElementById('ps'+i).classList.contains('active')) { setPipe(i,'error'); break; } }
+      for (let i = 0; i < 6; i++) {
+        const el = document.getElementById('ps' + i);
+        if (el && el.classList.contains('active')) {
+          setPipe(i, 'error');
+          break;
+        }
+      }
       setStatus('');
-      showErr(e.message.includes('fetch')||e.message.includes('Failed')
-        ? 'Cannot reach backend.\nMake sure uvicorn is running: uvicorn app:app --reload --port 8000'
-        : e.message);
+      
+      const serverRunTip = 'Make sure the backend server is running (e.g. `uvicorn app:app --reload --port 8000`).';
+      const cleanErr = e.message.includes('fetch') || e.message.includes('Failed')
+        ? `Cannot contact backend server at ${url}.\n${serverRunTip}`
+        : e.message;
+      showErr(cleanErr);
+    } finally {
+      btn.disabled = false;
     }
-    btn.disabled = false;
   }
 
   function renderResults(data, prompt) {
-    // Score cards
-    setScoreCard('Bert',     data.avg_bertscore);
-    setScoreCard('Nli',      data.avg_nli);
-    setScoreCard('Combined', data.avg_combined);
-    document.getElementById('scoreRow').style.display = '';
+    // 1. Calculate values
+    // Combined index is in [0, 1] representing risk. Consistency is 1 - risk
+    const consistencyPct = Math.round((1 - data.avg_combined) * 100);
+    const riskPct = Math.round(data.avg_combined * 100);
+    
+    // Confidence is agreement index based on diff between BERTScore and NLI
+    const agreementFactor = Math.abs(data.avg_bertscore - data.avg_nli);
+    const confidencePct = Math.max(80, Math.min(99, Math.round((1 - agreementFactor * 0.4) * 100)));
 
-    // Metrics
-    const flagBert = (data.scores_bertscore||[]).filter(s=>s>=0.5).length;
-    const flagNli  = (data.scores_nli||[]).filter(s=>s>=0.5).length;
-    document.getElementById('mSent').textContent   = (data.sentences||[]).length;
-    document.getElementById('mSamp').textContent   = data.n_samples;
-    document.getElementById('mFlagBert').textContent = flagBert;
-    document.getElementById('mFlagBert').style.color  = flagBert>0?'#e05c5c':'#1fc98e';
-    document.getElementById('mFlagNli').textContent  = flagNli;
-    document.getElementById('mFlagNli').style.color   = flagNli>0?'#e05c5c':'#1fc98e';
-    document.getElementById('mDevice').textContent  = data.device;
-    document.getElementById('respBox').textContent  = data.response;
+    // 2. Set Score Cards with counting animations
+    document.getElementById('scoreRow').style.display = 'grid';
+    
+    // Reset widths to 0 before triggering animations
+    document.getElementById('barConsistency').style.width = '0%';
+    document.getElementById('barRisk').style.width = '0%';
+    document.getElementById('barConfidence').style.width = '0%';
+    
+    setMetricCard('numConsistency', 'barConsistency', 'verdConsistency', consistencyPct, getScoreColor, getVerdictText);
+    setMetricCard('numRisk', 'barRisk', 'verdRisk', riskPct, getRiskColor, getRiskVerdictText);
+    setMetricCard('numConfidence', 'barConfidence', 'verdConfidence', confidencePct, getScoreColor, getConfidenceVerdictText);
 
-    // Sentence table
-    const tbody = document.getElementById('sentTableBody');
-    tbody.innerHTML = '';
-    (data.sentence_results||[]).forEach(r => {
-      const pb = pillStyle(r.bertscore);
-      const pn = pillStyle(r.nli);
-      const pc = pillStyle(r.combined);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><span class="sent-border" style="background:${scoreColor(r.combined)}"></span>${r.sentence}</td>
-        <td><span class="score-pill" style="background:${pb.bg};color:${pb.color}">${(r.bertscore*100).toFixed(1)}%</span></td>
-        <td><span class="score-pill" style="background:${pn.bg};color:${pn.color}">${(r.nli*100).toFixed(1)}%</span></td>
-        <td><span class="score-pill" style="background:${pc.bg};color:${pc.color}">${(r.combined*100).toFixed(1)}%</span></td>`;
-      tbody.appendChild(tr);
+    // 3. Populate raw metrics section
+    document.getElementById('mSent').textContent = (data.sentences || []).length;
+    document.getElementById('mSamp').textContent = data.n_samples;
+    document.getElementById('mMeanBert').textContent = (data.avg_bertscore * 100).toFixed(0) + '%';
+    document.getElementById('mMeanNli').textContent = (data.avg_nli * 100).toFixed(0) + '%';
+    document.getElementById('respBox').textContent = data.response;
+
+    // 4. Fill sentence list analysis
+    const sentListEl = document.getElementById('sentTableBody');
+    sentListEl.innerHTML = '';
+    
+    (data.sentence_results || []).forEach((r, idx) => {
+      // Consistency = (1 - combined score) * 100
+      const sentConsistency = Math.round((1 - r.combined) * 100);
+      
+      let badgeType = 'badge-low';
+      let badgeText = 'Low';
+      let fillClass = 'fill-green';
+      
+      if (sentConsistency < 53) {
+        badgeType = 'badge-high';
+        badgeText = 'High';
+        fillClass = 'fill-red';
+      } else if (sentConsistency < 70) {
+        badgeType = 'badge-med';
+        badgeText = 'Med';
+        fillClass = 'fill-yellow';
+      }
+      
+      const sRow = document.createElement('div');
+      sRow.className = 'sentence-row';
+      sRow.innerHTML = `
+        <div class="sentence-header">
+          <span class="badge ${badgeType}">${badgeText}</span>
+          <span class="sentence-text">${r.sentence}</span>
+          <span class="sentence-percentage">${sentConsistency}%</span>
+        </div>
+        <div class="sentence-bar-track">
+          <div class="sentence-bar-fill ${fillClass}" id="sent-bar-${idx}" style="width: 0%"></div>
+        </div>
+      `;
+      sentListEl.appendChild(sRow);
+      
+      // Animate the bar slide-in after insert
+      setTimeout(() => {
+        const bar = document.getElementById(`sent-bar-${idx}`);
+        if(bar) bar.style.width = sentConsistency + '%';
+      }, 50);
     });
 
-    // Samples
-    const smpl = document.getElementById('sampList');
-    smpl.innerHTML = '';
-    (data.samples||[]).forEach((s,i) => {
-      const d = document.createElement('div');
-      d.className = 'sample-block';
-      d.innerHTML = `<div class="sample-num">Sample ${i+1}</div><div class="resp-box">${s}</div>`;
-      smpl.appendChild(d);
+    // 5. Fill stochastic samples list
+    const smplListEl = document.getElementById('sampList');
+    smplListEl.innerHTML = '';
+    (data.samples || []).forEach((sample, i) => {
+      const block = document.createElement('div');
+      block.className = 'sample-block';
+      block.innerHTML = `
+        <div class="sample-num">Stochastic Generation ${i + 1}</div>
+        <div class="resp-box">${sample}</div>
+      `;
+      smplListEl.appendChild(block);
     });
 
-    document.getElementById('resultsCard').style.display = '';
+    // 6. Enable interface displays
+    document.getElementById('resultsCard').style.display = 'flex';
     document.getElementById('exportJsonBtn').disabled = false;
     document.getElementById('exportCsvBtn').disabled = false;
-    switchTab('overview', document.querySelector('.tab'));
+    
+    // Default to sentence analysis tab on render
+    switchTab('sentences');
 
-    // History
-    history.unshift({prompt:(prompt||'').slice(0,45)+(prompt.length>45?'…':''), score:data.avg_combined});
-    const list = document.getElementById('historyList');
-    list.innerHTML = history.slice(0,8).map(h=>`
+    // 7. Update run history list
+    const promptShort = prompt.length > 35 ? prompt.slice(0, 35) + '…' : prompt;
+    history.unshift({ prompt: promptShort, score: consistencyPct });
+    
+    const histListEl = document.getElementById('historyList');
+    histListEl.innerHTML = history.slice(0, 6).map(h => `
       <div class="history-item">
         <span class="history-prompt">${h.prompt}</span>
-        <span class="history-score" style="color:${scoreColor(h.score)}">${Math.round(h.score*100)}%</span>
-      </div>`).join('');
+        <span class="history-score" style="color: ${getScoreColor(h.score)}">${h.score}%</span>
+      </div>
+    `).join('');
   }
 
   function exportJSON() {
-    if(!lastResult) return;
-    const blob = new Blob([JSON.stringify(lastResult, null, 2)], {type:'application/json'});
+    if (!lastResult) return;
+    const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'halluciguard_result.json';
+    a.download = 'halluciguard_run_export.json';
     a.click();
   }
 
   function exportCSV() {
-    if(!lastResult) return;
-    const rows = [['Sentence','BERTScore','NLI','Combined','Verdict']];
-    (lastResult.sentence_results||[]).forEach(r => {
-      const v = r.combined < 0.35 ? 'Consistent' : r.combined < 0.6 ? 'Uncertain' : 'Hallucinated';
-      rows.push([`"${r.sentence.replace(/"/g,'""')}"`,
-        (r.bertscore*100).toFixed(1)+'%',
-        (r.nli*100).toFixed(1)+'%',
-        (r.combined*100).toFixed(1)+'%',
-        v]);
+    if (!lastResult) return;
+    const rows = [['Sentence', 'BERTScore Risk', 'NLI Risk', 'Combined Consistency', 'Risk Level']];
+    (lastResult.sentence_results || []).forEach(r => {
+      const consistencyVal = Math.round((1 - r.combined) * 100);
+      const level = consistencyVal >= 70 ? 'Low' : consistencyVal >= 53 ? 'Med' : 'High';
+      rows.push([
+        `"${r.sentence.replace(/"/g, '""')}"`,
+        (r.bertscore * 100).toFixed(1) + '%',
+        (r.nli * 100).toFixed(1) + '%',
+        consistencyVal + '%',
+        level
+      ]);
     });
     rows.push([]);
-    rows.push(['Avg BERTScore','Avg NLI','Avg Combined','Samples','Device']);
+    rows.push(['Mean Consistency', 'Mean Risk', 'Confidence Score', 'Samples Size']);
+    
+    const consistencyPct = Math.round((1 - lastResult.avg_combined) * 100);
+    const riskPct = Math.round(lastResult.avg_combined * 100);
+    const agreementFactor = Math.abs(lastResult.avg_bertscore - lastResult.avg_nli);
+    const confidencePct = Math.max(80, Math.min(99, Math.round((1 - agreementFactor * 0.4) * 100)));
+
     rows.push([
-      (lastResult.avg_bertscore*100).toFixed(1)+'%',
-      (lastResult.avg_nli*100).toFixed(1)+'%',
-      (lastResult.avg_combined*100).toFixed(1)+'%',
-      lastResult.n_samples,
-      lastResult.device,
+      consistencyPct + '%',
+      riskPct + '%',
+      confidencePct + '%',
+      lastResult.n_samples
     ]);
-    const csv = rows.map(r=>r.join(',')).join('\n');
-    const blob = new Blob([csv], {type:'text/csv'});
+    
+    const csvContent = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'halluciguard_result.csv';
+    a.download = 'halluciguard_run_export.csv';
     a.click();
   }
 
+  // Auto test connection on page boot
   testConnection();
 </script>
 </body>
