@@ -363,11 +363,13 @@ class SelfCheckNLI:
         scores = np.zeros((num_sentences, num_samples))
         for sent_i, sentence in enumerate(sentences):
             for sample_i, sample in enumerate(sampled_passages):
-                inputs = self.tokenizer.batch_encode_plus(
-                    batch_text_or_text_pairs=[(sentence, sample)],
-                    add_special_tokens=True, padding="longest",
-                    truncation=True, return_tensors="pt",
-                    return_token_type_ids=True, return_attention_mask=True,
+                inputs = self.tokenizer(
+                    sentence,
+                    sample,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                    return_attention_mask=True,
                 )
                 inputs = inputs.to(self.device)
                 logits = self.model(**inputs).logits # neutral is already removed
