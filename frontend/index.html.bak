@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HalluciGuard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0f1117; --bg2:#181c25; --bg3:#1e2230;
+      --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.14);
+      --text:#e8eaf0; --muted:#7a8099;
+      --teal:#1fc98e; --teal-dim:rgba(31,201,142,0.12);
+      --amber:#f5a623; --amber-dim:rgba(245,166,35,0.12);
+      --red:#e05c5c; --red-dim:rgba(224,92,92,0.12);
+      --blue:#5b9cf6; --blue-dim:rgba(91,156,246,0.12);
+      --purple:#a78bfa; --purple-dim:rgba(167,139,250,0.12);
+      --mono:'IBM Plex Mono',monospace; --sans:'Inter',sans-serif;
+      --radius:8px; --radius-lg:12px;
+    }
+    body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; line-height:1.6; min-height:100vh; }
+    .layout { display:grid; grid-template-columns:260px 1fr; grid-template-rows:56px 1fr; min-height:100vh; }
+
+    /* Topbar */
+    .topbar { grid-column:1/-1; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:12px; }
+    .logo-icon { width:28px; height:28px; background:var(--teal); border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .logo-icon svg { width:16px; height:16px; color:#0f1117; }
+    .logo-text { font-size:16px; font-weight:600; letter-spacing:-0.02em; }
+    .logo-badge { font-size:10px; font-family:var(--mono); background:var(--teal-dim); color:var(--teal); padding:2px 7px; border-radius:999px; border:1px solid rgba(31,201,142,0.2); }
+    .topbar-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+    .conn-indicator { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+    .conn-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .3s; }
+    .conn-dot.ok { background:var(--teal); box-shadow:0 0 6px rgba(31,201,142,0.5); }
+    .conn-dot.err { background:var(--red); }
+    .conn-dot.checking { background:var(--amber); animation:pulse .9s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+    /* Sidebar */
+    .sidebar { background:var(--bg2); border-right:1px solid var(--border); padding:20px 16px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; }
+    .sidebar-label { font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:0 4px; margin-bottom:4px; }
+    .sidebar-section { display:flex; flex-direction:column; gap:6px; }
+    .field { display:flex; flex-direction:column; gap:5px; }
+    .field label { font-size:12px; color:var(--muted); padding:0 2px; }
+    .field input, .field select { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--sans); font-size:13px; padding:7px 10px; width:100%; transition:border-color .15s; }
+    .field input:focus, .field select:focus { outline:none; border-color:var(--teal); }
+    .btn-test { background:transparent; border:1px solid var(--border2); border-radius:var(--radius); color:var(--muted); font-size:12px; cursor:pointer; padding:6px 10px; display:flex; align-items:center; gap:5px; transition:all .15s; width:100%; justify-content:center; }
+    .btn-test:hover { border-color:var(--teal); color:var(--teal); }
+    .pipe-steps { display:flex; flex-direction:column; gap:2px; }
+    .pipe-step { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--radius); font-size:12px; color:var(--muted); transition:all .2s; }
+    .pipe-step.active { background:var(--teal-dim); color:var(--teal); }
+    .pipe-step.done { color:var(--teal); }
+    .pipe-step.error { color:var(--red); }
+    .pipe-dot-sm { width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; opacity:0.4; }
+    .pipe-step.active .pipe-dot-sm, .pipe-step.done .pipe-dot-sm { opacity:1; }
+    .history-list { display:flex; flex-direction:column; gap:4px; }
+    .history-item { padding:7px 10px; border-radius:var(--radius); background:var(--bg3); border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .history-prompt { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+    .history-score { font-size:11px; font-family:var(--mono); font-weight:500; flex-shrink:0; }
+    .empty-history { font-size:12px; color:var(--muted); padding:4px 8px; }
+
+    /* Main */
+    .main { display:flex; flex-direction:column; overflow-y:auto; }
+    .main-inner { flex:1; padding:28px 32px; display:flex; flex-direction:column; gap:20px; max-width:920px; width:100%; }
+
+    /* Prompt card */
+    .prompt-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; }
+    .prompt-card textarea { width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--sans); font-size:14px; padding:12px 14px; resize:vertical; min-height:90px; transition:border-color .15s; }
+    .prompt-card textarea:focus { outline:none; border-color:var(--teal); }
+    .prompt-card textarea::placeholder { color:var(--muted); }
+    .prompt-actions { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    .btn-analyze { background:var(--teal); border:none; border-radius:var(--radius); color:#0f1117; font-size:14px; font-weight:600; cursor:pointer; padding:9px 22px; display:flex; align-items:center; gap:7px; transition:opacity .15s; }
+    .btn-analyze:hover { opacity:.85; }
+    .btn-analyze:disabled { opacity:.35; cursor:not-allowed; }
+    .btn-export { background:transparent; border:1px solid var(--border2); border-radius:var(--radius); color:var(--muted); font-size:13px; cursor:pointer; padding:8px 14px; display:flex; align-items:center; gap:6px; transition:all .15s; }
+    .btn-export:hover { border-color:var(--blue); color:var(--blue); }
+    .btn-export:disabled { opacity:.3; cursor:not-allowed; }
+    .status-msg { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+    .spinner { width:12px; height:12px; border:2px solid var(--border2); border-top-color:var(--teal); border-radius:50%; animation:spin .7s linear infinite; display:inline-block; flex-shrink:0; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .err-text { font-size:12px; color:var(--red); margin-top:8px; line-height:1.5; white-space:pre-wrap; }
+
+    /* Score cards row */
+    .score-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .score-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 18px; transition:border-color .2s; }
+    .score-card.active-method { border-color:var(--teal); }
+    .score-card-label { font-size:10px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:6px; }
+    .score-card-num { font-size:36px; font-weight:600; font-family:var(--mono); line-height:1; }
+    .score-card-verdict { font-size:11px; color:var(--muted); margin-top:4px; }
+    .bar-track { height:4px; border-radius:999px; background:var(--bg3); overflow:hidden; margin-top:10px; }
+    .bar-fill { height:100%; border-radius:999px; transition:width .9s cubic-bezier(.4,0,.2,1); }
+
+    /* Results card */
+    .results-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; }
+    .tabs { display:flex; border-bottom:1px solid var(--border); background:var(--bg3); }
+    .tab { padding:11px 18px; font-size:13px; color:var(--muted); cursor:pointer; border:none; background:none; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .15s; }
+    .tab:hover { color:var(--text); }
+    .tab.on { color:var(--teal); border-bottom-color:var(--teal); }
+    .tab-body { padding:20px; }
+
+    /* Metrics */
+    .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:10px; margin-bottom:16px; }
+    .metric { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; }
+    .metric-label { font-size:10px; color:var(--muted); margin-bottom:4px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.05em; }
+    .metric-value { font-size:16px; font-weight:600; font-family:var(--mono); }
+
+    /* Sentence table */
+    .sent-table { width:100%; border-collapse:collapse; }
+    .sent-table th { font-size:10px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+    .sent-table td { padding:10px 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:top; }
+    .sent-table tr:last-child td { border-bottom:none; }
+    .sent-table tr:hover td { background:var(--bg3); }
+    .score-pill { font-size:11px; font-family:var(--mono); font-weight:500; padding:3px 8px; border-radius:999px; white-space:nowrap; }
+    .sent-border { width:3px; border-radius:2px; min-height:20px; display:inline-block; margin-right:8px; vertical-align:middle; flex-shrink:0; }
+
+    /* Samples */
+    .sample-block { margin-bottom:14px; }
+    .sample-num { font-size:10px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:6px; }
+    .resp-box { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:14px; font-size:13px; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
+
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
+
+    @media(max-width:700px) {
+      .layout { grid-template-columns:1fr; }
+      .sidebar { border-right:none; border-bottom:1px solid var(--border); }
+      .main-inner { padding:16px; }
+      .score-row { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>
+      </svg>
+    </div>
+    <span class="logo-text">HalluciGuard</span>
+    <span class="logo-badge">v2.0</span>
+    <div class="topbar-right">
+      <div class="conn-indicator">
+        <div class="conn-dot" id="connDot"></div>
+        <span id="connLabel">not connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Backend</div>
+      <div class="field">
+        <label>Server URL</label>
+        <input type="url" id="backendUrl" value="http://localhost:8000" />
+      </div>
+      <button class="btn-test" onclick="testConnection()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        Test connection
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Parameters</div>
+      <div class="field">
+        <label>Samples</label>
+        <select id="nSamples">
+          <option value="3">3 samples</option>
+          <option value="5" selected>5 samples</option>
+          <option value="7">7 samples</option>
+          <option value="10">10 samples</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Max tokens</label>
+        <select id="maxTokens">
+          <option value="100">100</option>
+          <option value="200" selected>200</option>
+          <option value="300">300</option>
+          <option value="500">500</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Pipeline</div>
+      <div class="pipe-steps">
+        <div class="pipe-step" id="ps0"><div class="pipe-dot-sm"></div>Prompt received</div>
+        <div class="pipe-step" id="ps1"><div class="pipe-dot-sm"></div>GPT-2 generating</div>
+        <div class="pipe-step" id="ps2"><div class="pipe-dot-sm"></div>Sampling responses</div>
+        <div class="pipe-step" id="ps3"><div class="pipe-dot-sm"></div>BERTScore scoring</div>
+        <div class="pipe-step" id="ps4"><div class="pipe-dot-sm"></div>NLI scoring</div>
+        <div class="pipe-step" id="ps5"><div class="pipe-dot-sm"></div>Results ready</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">History</div>
+      <div class="history-list" id="historyList">
+        <div class="empty-history">No analyses yet</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="main-inner">
+
+      <!-- Prompt -->
+      <div class="prompt-card">
+        <textarea id="promptInput" placeholder="Enter a prompt for GPT-2, e.g. &quot;The Eiffel Tower was built in Paris in 1889&quot;"></textarea>
+        <div class="prompt-actions">
+          <button class="btn-analyze" id="runBtn" onclick="runPipeline()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Analyze
+          </button>
+          <button class="btn-export" id="exportJsonBtn" onclick="exportJSON()" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export JSON
+          </button>
+          <button class="btn-export" id="exportCsvBtn" onclick="exportCSV()" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+          <div class="status-msg" id="statusMsg"></div>
+        </div>
+        <div class="err-text" id="errMsg" style="display:none"></div>
+      </div>
+
+      <!-- Score cards — all 3 methods -->
+      <div class="score-row" id="scoreRow" style="display:none">
+        <div class="score-card" id="cardBert">
+          <div class="score-card-label">BERTScore</div>
+          <div class="score-card-num" id="numBert">—</div>
+          <div class="score-card-verdict" id="verdBert"></div>
+          <div class="bar-track"><div class="bar-fill" id="barBert" style="width:0%"></div></div>
+        </div>
+        <div class="score-card" id="cardNli">
+          <div class="score-card-label">NLI — DeBERTa</div>
+          <div class="score-card-num" id="numNli">—</div>
+          <div class="score-card-verdict" id="verdNli"></div>
+          <div class="bar-track"><div class="bar-fill" id="barNli" style="width:0%"></div></div>
+        </div>
+        <div class="score-card" id="cardCombined">
+          <div class="score-card-label">Combined</div>
+          <div class="score-card-num" id="numCombined">—</div>
+          <div class="score-card-verdict" id="verdCombined"></div>
+          <div class="bar-track"><div class="bar-fill" id="barCombined" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Results tabs -->
+      <div class="results-card" id="resultsCard" style="display:none">
+        <div class="tabs">
+          <button class="tab on" onclick="switchTab('overview',this)">Overview</button>
+          <button class="tab" onclick="switchTab('sentences',this)">Sentences</button>
+          <button class="tab" onclick="switchTab('samples',this)">Samples</button>
+        </div>
+
+        <div class="tab-body" id="tab-overview">
+          <div class="metrics">
+            <div class="metric"><div class="metric-label">Sentences</div><div class="metric-value" id="mSent">—</div></div>
+            <div class="metric"><div class="metric-label">Samples</div><div class="metric-value" id="mSamp">—</div></div>
+            <div class="metric"><div class="metric-label">Flagged (BERT)</div><div class="metric-value" id="mFlagBert">—</div></div>
+            <div class="metric"><div class="metric-label">Flagged (NLI)</div><div class="metric-value" id="mFlagNli">—</div></div>
+            <div class="metric"><div class="metric-label">Device</div><div class="metric-value" id="mDevice" style="font-size:13px">—</div></div>
+          </div>
+          <div class="sample-num" style="margin-bottom:8px">GPT-2 Generated Response</div>
+          <div class="resp-box" id="respBox"></div>
+        </div>
+
+        <div class="tab-body" id="tab-sentences" style="display:none">
+          <table class="sent-table">
+            <thead>
+              <tr>
+                <th style="width:45%">Sentence</th>
+                <th>BERTScore</th>
+                <th>NLI</th>
+                <th>Combined</th>
+              </tr>
+            </thead>
+            <tbody id="sentTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="tab-body" id="tab-samples" style="display:none">
+          <div id="sampList"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  let lastResult = null;
+  const history = [];
+
+  function setConn(state, label) {
+    document.getElementById('connDot').className = 'conn-dot ' + state;
+    document.getElementById('connLabel').textContent = label;
+  }
+  function setPipe(i, state) { document.getElementById('ps'+i).className = 'pipe-step '+state; }
+  function resetPipe() { for(let i=0;i<6;i++) setPipe(i,''); }
+  function setStatus(html) { document.getElementById('statusMsg').innerHTML = html; }
+  function showErr(msg) { const e=document.getElementById('errMsg'); e.style.display=msg?'':'none'; e.textContent=msg; }
+
+  function switchTab(name, el) {
+    ['overview','sentences','samples'].forEach(t => {
+      document.getElementById('tab-'+t).style.display = t===name?'':'none';
+    });
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+    el.classList.add('on');
+  }
+
+  function scoreColor(s) {
+    if(s < 0.35) return '#1fc98e';
+    if(s < 0.6)  return '#f5a623';
+    return '#e05c5c';
+  }
+  function verdict(s) {
+    if(s < 0.25) return 'Highly consistent';
+    if(s < 0.45) return 'Mostly consistent';
+    if(s < 0.65) return 'Possibly hallucinated';
+    return 'Likely hallucinated';
+  }
+  function pillStyle(s) {
+    if(s < 0.35) return {bg:'rgba(31,201,142,.15)',color:'#1fc98e',label:'Consistent'};
+    if(s < 0.6)  return {bg:'rgba(245,166,35,.15)', color:'#f5a623',label:'Uncertain'};
+    return              {bg:'rgba(224,92,92,.15)',  color:'#e05c5c',label:'Hallucinated'};
+  }
+
+  function setScoreCard(prefix, score) {
+    const pct = Math.round(score*100);
+    const col = scoreColor(score);
+    document.getElementById('num'+prefix).textContent = pct+'%';
+    document.getElementById('num'+prefix).style.color = col;
+    document.getElementById('verd'+prefix).textContent = verdict(score);
+    document.getElementById('bar'+prefix).style.width = pct+'%';
+    document.getElementById('bar'+prefix).style.background = col;
+  }
+
+  async function testConnection() {
+    const url = document.getElementById('backendUrl').value.trim();
+    setConn('checking','checking…');
+    try {
+      const res = await fetch(url+'/health', {signal:AbortSignal.timeout(5000)});
+      if(res.ok) {
+        const d = await res.json();
+        setConn('ok', `connected · ${d.device} · ${(d.scorers||[]).join(', ')}`);
+      } else {
+        setConn('err','server error '+res.status);
+      }
+    } catch { setConn('err','cannot reach server'); }
+  }
+
+  async function runPipeline() {
+    const prompt = document.getElementById('promptInput').value.trim();
+    if(!prompt) { showErr('Please enter a prompt.'); return; }
+    const url       = document.getElementById('backendUrl').value.trim();
+    const nSamples  = parseInt(document.getElementById('nSamples').value);
+    const maxTokens = parseInt(document.getElementById('maxTokens').value);
+
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    document.getElementById('scoreRow').style.display = 'none';
+    document.getElementById('resultsCard').style.display = 'none';
+    document.getElementById('exportJsonBtn').disabled = true;
+    document.getElementById('exportCsvBtn').disabled = true;
+    showErr(''); resetPipe();
+
+    const steps = [
+      'Sending prompt…',
+      'GPT-2 generating response…',
+      'Generating '+nSamples+' stochastic samples…',
+      'Running BERTScore…',
+      'Running NLI (DeBERTa)…',
+      'Computing combined scores…',
+    ];
+    let step = 0;
+    function nextStep() {
+      if(step>0) setPipe(step-1,'done');
+      if(step<6) { setPipe(step,'active'); setStatus(`<span class="spinner"></span> ${steps[step]}`); step++; }
+    }
+    nextStep();
+    const timer = setInterval(()=>{ if(step<6) nextStep(); else clearInterval(timer); }, 2500);
+
+    try {
+      const res = await fetch(url+'/analyze', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({prompt, n_samples:nSamples, max_new_tokens:maxTokens}),
+      });
+      clearInterval(timer);
+      if(!res.ok) { const t=await res.text(); throw new Error(`Server ${res.status}: ${t}`); }
+      const data = await res.json();
+      for(let i=0;i<6;i++) setPipe(i,'done');
+      setStatus('');
+      lastResult = data;
+      renderResults(data, prompt);
+    } catch(e) {
+      clearInterval(timer);
+      for(let i=0;i<6;i++) { if(document.getElementById('ps'+i).classList.contains('active')) { setPipe(i,'error'); break; } }
+      setStatus('');
+      showErr(e.message.includes('fetch')||e.message.includes('Failed')
+        ? 'Cannot reach backend.\nMake sure uvicorn is running: uvicorn app:app --reload --port 8000'
+        : e.message);
+    }
+    btn.disabled = false;
+  }
+
+  function renderResults(data, prompt) {
+    // Score cards
+    setScoreCard('Bert',     data.avg_bertscore);
+    setScoreCard('Nli',      data.avg_nli);
+    setScoreCard('Combined', data.avg_combined);
+    document.getElementById('scoreRow').style.display = '';
+
+    // Metrics
+    const flagBert = (data.scores_bertscore||[]).filter(s=>s>=0.5).length;
+    const flagNli  = (data.scores_nli||[]).filter(s=>s>=0.5).length;
+    document.getElementById('mSent').textContent   = (data.sentences||[]).length;
+    document.getElementById('mSamp').textContent   = data.n_samples;
+    document.getElementById('mFlagBert').textContent = flagBert;
+    document.getElementById('mFlagBert').style.color  = flagBert>0?'#e05c5c':'#1fc98e';
+    document.getElementById('mFlagNli').textContent  = flagNli;
+    document.getElementById('mFlagNli').style.color   = flagNli>0?'#e05c5c':'#1fc98e';
+    document.getElementById('mDevice').textContent  = data.device;
+    document.getElementById('respBox').textContent  = data.response;
+
+    // Sentence table
+    const tbody = document.getElementById('sentTableBody');
+    tbody.innerHTML = '';
+    (data.sentence_results||[]).forEach(r => {
+      const pb = pillStyle(r.bertscore);
+      const pn = pillStyle(r.nli);
+      const pc = pillStyle(r.combined);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><span class="sent-border" style="background:${scoreColor(r.combined)}"></span>${r.sentence}</td>
+        <td><span class="score-pill" style="background:${pb.bg};color:${pb.color}">${(r.bertscore*100).toFixed(1)}%</span></td>
+        <td><span class="score-pill" style="background:${pn.bg};color:${pn.color}">${(r.nli*100).toFixed(1)}%</span></td>
+        <td><span class="score-pill" style="background:${pc.bg};color:${pc.color}">${(r.combined*100).toFixed(1)}%</span></td>`;
+      tbody.appendChild(tr);
+    });
+
+    // Samples
+    const smpl = document.getElementById('sampList');
+    smpl.innerHTML = '';
+    (data.samples||[]).forEach((s,i) => {
+      const d = document.createElement('div');
+      d.className = 'sample-block';
+      d.innerHTML = `<div class="sample-num">Sample ${i+1}</div><div class="resp-box">${s}</div>`;
+      smpl.appendChild(d);
+    });
+
+    document.getElementById('resultsCard').style.display = '';
+    document.getElementById('exportJsonBtn').disabled = false;
+    document.getElementById('exportCsvBtn').disabled = false;
+    switchTab('overview', document.querySelector('.tab'));
+
+    // History
+    history.unshift({prompt:(prompt||'').slice(0,45)+(prompt.length>45?'…':''), score:data.avg_combined});
+    const list = document.getElementById('historyList');
+    list.innerHTML = history.slice(0,8).map(h=>`
+      <div class="history-item">
+        <span class="history-prompt">${h.prompt}</span>
+        <span class="history-score" style="color:${scoreColor(h.score)}">${Math.round(h.score*100)}%</span>
+      </div>`).join('');
+  }
+
+  function exportJSON() {
+    if(!lastResult) return;
+    const blob = new Blob([JSON.stringify(lastResult, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'halluciguard_result.json';
+    a.click();
+  }
+
+  function exportCSV() {
+    if(!lastResult) return;
+    const rows = [['Sentence','BERTScore','NLI','Combined','Verdict']];
+    (lastResult.sentence_results||[]).forEach(r => {
+      const v = r.combined < 0.35 ? 'Consistent' : r.combined < 0.6 ? 'Uncertain' : 'Hallucinated';
+      rows.push([`"${r.sentence.replace(/"/g,'""')}"`,
+        (r.bertscore*100).toFixed(1)+'%',
+        (r.nli*100).toFixed(1)+'%',
+        (r.combined*100).toFixed(1)+'%',
+        v]);
+    });
+    rows.push([]);
+    rows.push(['Avg BERTScore','Avg NLI','Avg Combined','Samples','Device']);
+    rows.push([
+      (lastResult.avg_bertscore*100).toFixed(1)+'%',
+      (lastResult.avg_nli*100).toFixed(1)+'%',
+      (lastResult.avg_combined*100).toFixed(1)+'%',
+      lastResult.n_samples,
+      lastResult.device,
+    ]);
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'halluciguard_result.csv';
+    a.click();
+  }
+
+  testConnection();
+</script>
+</body>
+</html>
