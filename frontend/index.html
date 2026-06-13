@@ -34,13 +34,37 @@
     #root{position:relative;z-index:1}
     .orb{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,229,160,0.06) 0%,transparent 70%);pointer-events:none;z-index:0}
     textarea:focus,input:focus,select:focus{outline:none}
+
+    /* 🤖 Production-Grade Large Factual Help Desk Assistant UI Layout Styles */
+    .bot-fab { position:fixed; bottom:24px; right:24px; width:60px; height:56px; border-radius:50%; background:var(--teal); border:none; color:#0f1117; font-size:26px; cursor:pointer; box-shadow:0 6px 24px rgba(0,229,160,0.4); display:flex; align-items:center; justify-content:center; z-index:200; transition:transform 0.2s; }
+    .bot-fab:hover { transform:scale(1.08); }
+    .bot-panel { position:fixed; bottom:96px; right:24px; width:500px; height:700px; max-height:calc(100vh - 120px); background:rgba(14,19,38,0.96); backdrop-filter:blur(32px); -webkit-backdrop-filter:blur(32px); border:1px solid var(--border2); border-radius:16px; display:none; flex-direction:column; overflow:hidden; z-index:200; box-shadow:0 16px 48px rgba(0,0,0,0.6); animation:fadeIn 0.25s ease; }
+    .bot-panel.open { display:flex; }
+    .bot-header { padding:20px 24px; border-bottom:1px solid var(--border); font-size:22px; font-weight:600; display:flex; align-items:center; gap:8px; background:var(--bg2); }
+    .bot-close { margin-left:auto; background:none; border:none; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; }
+    .bot-close:hover { color:var(--text); }
+    .bot-messages { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:16px; }
+    .bot-msg { font-size:16px; line-height:1.7; padding:12px 16px; border-radius:12px; max-width:100%; word-wrap:break-word; color:var(--text); }
+    .bot-msg.bot { align-self:flex-start; background:var(--bg3); border:1px solid var(--border); }
+    .bot-msg.user { align-self:flex-end; background:var(--teal-dim); border:1px solid rgba(0,229,160,0.2); color:#ffffff; }
+    .bot-msg ul, .bot-msg ol { margin:8px 0 4px 22px; }
+    .bot-msg li { margin-bottom:6px; }
+    .bot-msg .bot-stat { color:var(--teal); font-family:var(--mono); font-weight:600; background:rgba(0,229,160,0.06); padding:2px 5px; border-radius:4px; }
+    .bot-followups { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; align-self:flex-start; max-width:100%; }
+    .bot-chip { background:var(--bg2); border:1px solid var(--border2); border-radius:999px; color:var(--teal); font-size:14px; cursor:pointer; padding:8px 16px; transition:all .15s; text-align:left; line-height:1.3; font-weight:500; }
+    .bot-chip:hover { background:var(--teal-dim); border-color:var(--teal); transform:translateY(-1px); }
+    .bot-input-row { padding:14px; border-top:1px solid var(--border); display:flex; gap:10px; flex-shrink:0; background:var(--bg2); }
+    .bot-input-row input { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--sans); font-size:16px; padding:12px 16px; }
+    .bot-input-row input:focus { border-color:var(--teal); }
+    .bot-input-row button { background:var(--teal); border:none; border-radius:8px; color:#0f1117; width:44px; cursor:pointer; font-size:16px; font-weight:600; display:flex; align-items:center; justify-content:center; }
   </style>
 </head>
 <body>
 <div class="orb"></div>
 <div id="root"></div>
+
 <script type="text/babel">
-const {useState,useEffect,useCallback} = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 const scoreColor  = s => s<0.35?'#00E5A0':s<0.6?'#FFB547':'#FF5C7A';
 const scoreBg     = s => s<0.35?'rgba(0,229,160,0.1)':s<0.6?'rgba(255,181,71,0.1)':'rgba(255,92,122,0.1)';
@@ -195,6 +219,18 @@ function App(){
   const [activeTab,setActiveTab]=useState('overview');
   const [history,setHistory]=useState([]);
 
+  /* Bot State Arrays */
+  const [botOpen, setBotOpen] = useState(false);
+  const [botInput, setBotInput] = useState('');
+  const [messages, setMessages] = useState([
+    {
+      role: 'bot',
+      text: `👋 Welcome to HalluciGuard.<br><br>I am <strong>HalluciBot</strong>, your dedicated dashboard helper assistant. I can explain any operational parameters, color codes, sidebar history cards, or system pipelines. Ask a question or tap a chip!`,
+      follow: ['How do I use this app?', 'What do the red, yellow, and green colors mean?', 'What is the Combined Score?', 'How can I reach the owners?']
+    }
+  ]);
+  const msgEndRef = useRef(null);
+
   const pipeLabels=['Prompt received','GPT-2 generating','Stochastic sampling','BERTScore scoring','NLI scoring','Results ready'];
 
   const testConnection=useCallback(async()=>{
@@ -207,6 +243,7 @@ function App(){
   },[backendUrl]);
 
   useEffect(()=>{testConnection();},[]);
+  useEffect(() => { if (msgEndRef.current) { msgEndRef.current.scrollIntoView({ behavior: 'smooth' }); } }, [messages]);
 
   const runPipeline=async()=>{
     if(!prompt.trim()){setError('Please enter a prompt.');return;}
@@ -249,149 +286,294 @@ function App(){
     a.download='halluciguard_result.csv';a.click();
   };
 
-  return(
-    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column'}}>
-      <Topbar connState={connState} connLabel={connLabel}/>
-      <div style={{display:'grid',gridTemplateColumns:'260px 1fr',flex:1,minHeight:0}}>
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
 
+  /* 🤖 All Requested 60+ Question Structured Knowledge Base Data Array Map */
+  const botKnowledge = [
+    // --- General App Questions ---
+    { keys: ['what is halluciguard', 'can you explain the app'],
+      answer: "<strong>What is HalluciGuard?</strong><br>HalluciGuard is a specialized automated playground environment created to monitor, measure, and pinpoint factual contradictions or fabrications inside language model text runs.",
+      follow: ['What does HalluciGuard do?', 'How does HalluciGuard work?', 'What problem does HalluciGuard solve?'] },
+    { keys: ['what does halluciguard do', 'what is hallucination detection'],
+      answer: "<strong>Factual Anomaly Mitigation Engine:</strong><br>The app evaluates target AI texts sentence-by-sentence to verify factual stability, calling on metric cross-attention loops to visually highlight ungrounded strings.",
+      follow: ['How does HalluciGuard work?', 'What is SelfCheckGPT?', 'What technologies are used in HalluciGuard?'] },
+    { keys: ['how does halluciguard work', 'what problem does halluciguard solve', 'technologies are used in halluciguard'],
+      answer: "<strong>System Infrastructure & Workflow Logic:</strong><br>The prompt goes to a GPT-2 Medium node to extract a baseline statement alongside a set of stochastic samples. The text sequences pass into evaluation encoders: BERTScore evaluates semantic similarity through embedding spaces, while DeBERTa checks logical contradiction variables.",
+      follow: ['What is SelfCheckGPT?', 'Explain pipeline steps'] },
+    { keys: ['what is selfcheckgpt'],
+      answer: "<strong>SelfCheckGPT Heuristic Logic:</strong><br>SelfCheckGPT relies on a simple premise: if an AI model contains a solid fact within its parameters, repeated stochastic checks will output consistent matching keywords. When text diverges wildly across samples, it reveals a hallucination.",
+      follow: ['What is the Combined Score?', 'Explain pipeline steps'] },
+
+    // --- Getting Started ---
+    { keys: ['how do i use this app', 'how do i get started', 'how do i analyze a prompt', 'what should i enter in the prompt box'],
+      answer: "<strong>Step-by-Step App Onboarding Guide:</strong><br><ol><li>Type or paste a baseline string inside the main <strong>Prompt for GPT-2</strong> box area.</li><li>Tune parameters on the left sidebar menu (such as choosing sample density counts).</li><li>Click the green <strong>Analyze</strong> button to begin processing.</li><li>Observe the left side <strong>Pipeline</strong> steps tracking indicators update live.</li><li>Review fine-grained percentage metrics and highlighters once loops complete.</li></ol>",
+      follow: ['What do the red, yellow, and green colors mean?', 'What is the Combined Score?'] },
+    { keys: ['what happens when i click analyze', 'can i analyze any text', 'how long does analysis take'],
+      answer: "<strong>Pipeline Runtime Metrics:</strong><br>Clicking Analyze locks all parameter menus and triggers generation tracks. The evaluation speed directly matches your chosen sample depth and token size configurations.",
+      follow: ['Explain pipeline steps', 'What do parameters and samples mean?'] },
+
+    // --- Interface Guide ---
+    { keys: ['can you explain the interface', 'explain the dashboard layout', 'what is the prompt section', 'what is the sidebar', 'what is the results section', 'what is the overview tab', 'what is the sentences tab', 'what is the samples tab'],
+      answer: "<strong>Interface Layout Map:</strong><br><ul><li><strong>Sidebar Panel (Left)</strong>: Tracks Server Host URLs, parameter selectors, pipeline tracking nodes, and browser log history lists.</li><li><strong>Main Desk Console (Center)</strong>: Anchors text area feeds, three score summaries, and specific evaluation tab views (Overview metrics, Sentence rows, and alternate Sample traces).</li></ul>",
+      follow: ['What do parameters and samples mean?', 'How do I use this app?'] },
+
+    // --- Buttons ---
+    { keys: ['what does the analyze button do', 'what does export json do', 'what does export csv do', 'what does test connection do', 'what does the chatbot button do'],
+      answer: "<strong>Dashboard Controls Action Guide:</strong><br><ul><li><strong>Analyze</strong>: Runs data parsing checks.</li><li><strong>Export JSON/CSV</strong>: Dumps structured text evaluation reports.</li><li><strong>Test Connection</strong>: Pings your backend framework.</li><li><strong>Chatbot Button</strong>: Toggles this help panel.</li></ul>",
+      follow: ['How do I use this app?', 'How do I export results?'] },
+
+    // --- Parameters ---
+    { keys: ['parameters', 'samples mean', 'how many samples should i choose', 'what is max tokens', 'how does max tokens affect results', 'which parameter settings are recommended', 'what happens if i increase the number of samples'],
+      answer: "<strong>Sidebar Tuner System Matrix:</strong><br><ul><li><strong>Samples Selection</strong>: Sets how many alternative stochastic text answers are sampled from GPT-2. High samples give tighter accuracy checks, while low samples reduce server load.</li><li><strong>Max New Tokens</strong>: Controls length bounds for the generated text segment. Higher allocations allow longer text generations but increase runtime parsing durations.</li></ul>",
+      follow: ['Explain pipeline steps', 'What is the Combined Score?'] },
+
+    // --- Pipeline Section ---
+    { keys: ['pipeline', 'pipe line', 'steps', 'prompt received', 'gpt-2 generating', 'sampling responses', 'bertscore scoring', 'nli scoring', 'results ready'],
+      answer: "<strong>The Pipeline Engine Process Flow:</strong><br>The pipeline track visualizes how an incoming text block turns into consistency metrics:<ol><li><strong>Prompt Received</strong>: Validates text inside input containers.</li><li><strong>GPT-2 Generating</strong>: Extracts primary generation response strings.</li><li><strong>Sampling Responses</strong>: Collects diverse alternative answers to cross-check factual consistency.</li><li><strong>BERTScore Scoring</strong>: Calculates semantic similarity metrics via high-dimensional contextual embeddings.</li><li><strong>NLI Scoring</strong>: DeBERTa runs checks to catch logical contradictions.</li><li><strong>Results Ready</strong>: Generates the structured overview data panel.</li></ol>",
+      follow: ['What is BERTScore?', 'What is NLI?'] },
+
+    // --- Scores & Metrics ---
+    { keys: ['what is bertscore', 'high score mean', 'low score mean'],
+      answer: "<strong>BERTScore Inconsistency Matrix:</strong><br>BERTScore computes high-dimensional token mappings to verify relative alignment against generation alternatives. High values note high semantic variance (mismatched facts), while lower indices note semantic continuity across runs.",
+      follow: ['What is NLI?', 'What is the Combined Score?'] },
+    { keys: ['what is nli', 'nli mean'],
+      answer: "<strong>NLI Contradiction Index:</strong><br>Natural Language Inference maps statement chains using a DeBERTa-v3 model to classify whether alternative responses support, contradict, or remain neutral toward your input text. High scores reveal direct logical conflicts across runs.",
+      follow: ['What is BERTScore?', 'What is the Combined Score?'] },
+    { keys: ['what is the combined score', 'reliability calculated', 'reliable mean', 'uncertain mean', 'hallucinated mean'],
+      answer: "<strong>Combined Validation Aggregator:</strong><br>The Combined Score computes the dynamic mean average between the <em>BERTScore Inconsistency</em> vector match and the <em>NLI Contradiction Index</em> probability class. Outputs under 35% are Reliable, 35%-60% show Uncertain configurations, and scores above 60% mark Hallucinated anomalies.",
+      follow: ['What do the red, yellow, and green colors mean?', 'How is reliability calculated?'] },
+
+    // --- Results Section ---
+    { keys: ['how do i read the results', 'what do the colored score cards mean', 'what do the percentage scores represent', 'what are sentence-level scores', 'why was a sentence flagged', 'how do i identify hallucinated sentences', 'what should i do if a sentence is flagged', 'color', 'colors', 'red', 'yellow', 'green', 'meaning of colour'],
+      answer: "<strong>Factual Severity Color Diagnostics Palette:</strong><br><ul><li>🟢 <span class='bot-stat' style='color:#00E5A0'>Green (Consistent)</span>: Scores under 35%. Text is mathematically grounded across stochastic recovery pathways.</li><li>🟡 <span class='bot-stat' style='color:#FFB547'>Yellow (Uncertain)</span>: Scores between 35% and 60%. Indicates semantic noise or unconfirmed statements in reference checks.</li><li>🔴 <span class='bot-stat' style='color:#FF5C7A'>Red (Hallucinated)</span>: Scores above 60%. Triggered when cross-examination models flag explicit logical contradictions or deep embedding variances. Avoid using this content without verification.</li></ul>",
+      follow: ['What is the Combined Score?', 'Explain pipeline steps'] },
+
+    // --- Samples ---
+    { keys: ['samples', 'generated samples', 'why does halluciguard generate multiple samples', 'how do samples help detect hallucinations', 'can i view all generated samples'],
+      answer: "<strong>Factual Consistency Verification via Cross-Sampling:</strong><br>Generating alternative text channels provides an intrinsic baseline to cross-check consistency. You can view every raw statement that was cross-referenced during analysis directly under the **Samples** results tab.",
+      follow: ['What is SelfCheckGPT?', 'What do parameters and samples mean?'] },
+
+    // --- History ---
+    { keys: ['history', 'history section', 'how is history used', 'does history save permanently', 'can i clear history', 'what information is stored in history'],
+      answer: "<strong>Session Log Cache:</strong><br>The history list records active text evaluation summaries and aggregate consistency data during your browser session. This helps you compare results across multiple runs, but it resets when you reload or close the page.",
+      follow: ['How do I use this app?', 'What is the Combined Score?'] },
+
+    // --- Backend & Connection ---
+    { keys: ['server url', 'indicator red', 'indicator mean', 'connect to the backend', 'start the backend', 'backend server'],
+      answer: "<strong>Connection Support Panel:</strong><br>Ensure your local web server is running. A red dot indicates that API pings are failing. Open your terminal layout and launch the server application by running: <br><span style='font-family:var(--mono);color:var(--teal);'>uvicorn app:app --reload --port 8000</span>",
+      follow: ['How do I use this app?', 'Explain pipeline steps'] },
+
+    // --- Exporting ---
+    { keys: ['export results', 'json export', 'csv export', 'export format', 'which export format should i use'],
+      answer: "<strong>Data Export Frameworks:</strong><br><ul><li><strong>JSON Export</strong>: Downloads the full structured raw payload array (ideal for developer pipelines).</li><li><strong>CSV Export</strong>: Outputs a flat spreadsheet data layout mapping out explicit factual metrics per row (ideal for tabular reporting).</li></ul>",
+      follow: ['How do I use this app?', 'What is the Combined Score?'] },
+
+    // --- Contact & Support ---
+    { keys: ['contact', 'owner', 'email', 'reach', 'support', 'developer', 'bug', 'feedback', 'team', 'owners', 'reach the owners'],
+      answer: "For support, feedback, bug reports, or collaboration inquiries, you can reach the HalluciGuard team at:<br>📧 <a href='mailto:halluciguard@gmail.com' style='color:var(--teal);text-decoration:underline;font-weight:600;'>halluciguard@gmail.com</a><br><br>We welcome suggestions, feature requests, and questions about the platform.",
+      follow: ['How do I use this app?', 'What is the Combined Score?'] }
+  ];
+
+  /* 🛠️ Safe Virtual DOM Mutator Channel Helpers */
+  const handleBotAsk = (question) => {
+    const lowercaseQuery = question.trim().toLowerCase();
+    
+    let matchedAnswer = "I can help explain any panel configuration on this dashboard. Ask me things like \"What is the Combined Score?\", \"What do the colors mean?\", \"Explain pipeline steps\", or select a chip below.";
+    let matchedFollow = ['How do I use this app?', 'What is the Combined Score?', 'What do the red, yellow, and green colors mean?', 'Explain pipeline steps'];
+    
+    for (const item of botKnowledge) {
+      if (item.keys.some(k => lowercaseQuery.includes(k))) {
+        matchedAnswer = item.answer;
+        matchedFollow = item.follow;
+        break;
+      }
+    }
+
+    setMessages(prev => [...prev, { role: 'user', text: question }]);
+
+    setTimeout(() => {
+      setMessages(prev => [...prev, { role: 'bot', text: matchedAnswer, follow: matchedFollow }]);
+    }, 50);
+  };
+
+  const handleSendInput = () => {
+    if (!botInput.trim()) return;
+    const query = botInput;
+    setBotInput('');
+    handleBotAsk(query);
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Topbar connState={connState} connLabel={connLabel} />
+      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', flex: 1, minHeight: 0, position: 'relative' }}>
+        
         {/* Sidebar */}
-        <aside style={{background:'var(--bg2)',borderRight:'1px solid var(--border)',padding:'20px 16px',display:'flex',flexDirection:'column',gap:24,overflowY:'auto'}}>
-
+        <aside style={{ background: 'var(--bg2)', borderRight: '1px solid var(--border)', padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 24, overflowY: 'auto' }}>
           <div>
-            <div style={{fontSize:10,fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--muted)',marginBottom:10}}>Backend</div>
-            <input value={backendUrl} onChange={e=>setBackendUrl(e.target.value)}
-              style={{width:'100%',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text)',fontFamily:'var(--mono)',fontSize:12,padding:'7px 10px',marginBottom:8}}/>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 10 }}>Backend</div>
+            <input value={backendUrl} onChange={e => setBackendUrl(e.target.value)}
+              style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 12, padding: '7px 10px', marginBottom: 8 }} />
             <button onClick={testConnection}
-              style={{width:'100%',background:'transparent',border:'1px solid var(--border2)',borderRadius:8,color:'var(--muted)',fontSize:12,cursor:'pointer',padding:'7px',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor='#00E5A0';e.currentTarget.style.color='#00E5A0';}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.color='var(--muted)';}}>
+              style={{ width: '100%', background: 'transparent', border: '1px solid var(--border2)', borderRadius: 8, color: 'var(--muted)', fontSize: 12, cursor: 'pointer', padding: '7px', display: 'flex', alignItems: 'center', justifyStyle: 'center', gap: 6 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#00E5A0'; e.currentTarget.style.color = '#00E5A0'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.color = 'var(--muted)'; }}>
               ↻ Test connection
             </button>
           </div>
 
           <div>
-            <div style={{fontSize:10,fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--muted)',marginBottom:10}}>Parameters</div>
-            {[['Samples',nSamples,setNSamples,[3,5,7,10],v=>`${v} samples`],['Max tokens',maxTokens,setMaxTokens,[100,200,300,500],v=>`${v}`]].map(([lbl,val,set,opts,fmt])=>(
-              <div key={lbl} style={{marginBottom:10}}>
-                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>{lbl}</label>
-                <select value={val} onChange={e=>set(Number(e.target.value))}
-                  style={{width:'100%',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text)',fontFamily:'var(--sans)',fontSize:13,padding:'7px 10px'}}>
-                  {opts.map(o=><option key={o} value={o}>{fmt(o)}</option>)}
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 10 }}>Parameters</div>
+            {[['Samples', nSamples, setNSamples, [3, 5, 7, 10], v => `${v} samples`], ['Max tokens', maxTokens, setMaxTokens, [100, 200, 300, 500], v => `${v}`]].map(([lbl, val, set, opts, fmt]) => (
+              <div key={lbl} style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>{lbl}</label>
+                <select value={val} onChange={e => set(Number(e.target.value))}
+                  style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: 13, padding: '7px 10px' }}>
+                  {opts.map(o => <option key={o} value={o}>{fmt(o)}</option>)}
                 </select>
               </div>
             ))}
           </div>
 
           <div>
-            <div style={{fontSize:10,fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--muted)',marginBottom:8}}>Pipeline</div>
-            {pipeLabels.map((lbl,i)=><PipelineStep key={lbl} label={lbl} state={pipeSteps[i]}/>)}
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8 }}>Pipeline</div>
+            {pipeLabels.map((lbl, i) => <PipelineStep key={lbl} label={lbl} state={pipeSteps[i]} />)}
           </div>
 
           <div>
-            <div style={{fontSize:10,fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--muted)',marginBottom:8}}>History</div>
-            {history.length===0
-              ?<div style={{fontSize:12,color:'var(--muted)',padding:'4px 8px'}}>No analyses yet</div>
-              :history.map((h,i)=>(
-                <div key={i} style={{marginBottom:4,padding:'8px 10px',borderRadius:8,background:'var(--bg3)',border:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                  <span style={{fontSize:11,color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>{h.prompt}</span>
-                  <span style={{fontSize:11,fontFamily:'var(--mono)',fontWeight:600,color:scoreColor(h.score),flexShrink:0}}>{Math.round(h.score*100)}%</span>
+            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8 }}>History</div>
+            {history.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 8px' }}>No analyses yet</div>
+            ) : (
+              history.map((h, i) => (
+                <div key={i} style={{ marginBottom: 4, padding: '8px 10px', borderRadius: 8, background: 'var(--bg3)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{h.prompt}</span>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 600, color: scoreColor(h.score), flexShrink: 0 }}>{Math.round(h.score * 100)}%</span>
                 </div>
               ))
-            }
+            )}
           </div>
         </aside>
 
-        {/* Main */}
-        <main style={{overflowY:'auto',padding:'28px 32px',display:'flex',flexDirection:'column',gap:20}}>
-
-          {/* Prompt card */}
-          <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:16,padding:'20px 22px'}}>
-            <div style={{fontSize:11,fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.08em',color:'var(--muted)',marginBottom:10}}>Prompt</div>
-            <textarea value={prompt} onChange={e=>setPrompt(e.target.value)}
-              onKeyDown={e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))runPipeline();}}
-              placeholder="Enter a prompt for GPT-2 to generate and fact-check…"
-              style={{width:'100%',minHeight:88,resize:'vertical',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:10,color:'var(--text)',fontFamily:'var(--sans)',fontSize:14,padding:'12px 14px',transition:'border-color 0.15s',lineHeight:1.6}}
-              onFocus={e=>e.target.style.borderColor='rgba(0,229,160,0.4)'}
-              onBlur={e=>e.target.style.borderColor='var(--border)'}/>
-            <div style={{display:'flex',alignItems:'center',gap:10,marginTop:12,flexWrap:'wrap'}}>
-              <button onClick={runPipeline} disabled={running}
-                style={{background:running?'var(--bg4)':'linear-gradient(135deg,#00E5A0,#4D9EFF)',border:'none',borderRadius:10,color:running?'var(--muted)':'#000',fontFamily:'var(--sans)',fontSize:14,fontWeight:700,cursor:running?'not-allowed':'pointer',padding:'10px 24px',display:'flex',alignItems:'center',gap:8,boxShadow:running?'none':'0 0 20px rgba(0,229,160,0.25)',transition:'all 0.15s'}}>
-                {running?<div style={{width:13,height:13,border:'2px solid var(--muted)',borderTopColor:'#00E5A0',borderRadius:'50%',animation:'spin 0.7s linear infinite'}}/>:'▶'}
-                {running?statusMsg||'Analyzing…':'Analyze'}
-              </button>
-              {[['↓ Export JSON',exportJSON],['↓ Export CSV',exportCSV]].map(([lbl,fn])=>(
-                <button key={lbl} onClick={fn} disabled={!result}
-                  style={{background:'transparent',border:'1px solid var(--border2)',borderRadius:10,color:result?'var(--muted)':'var(--bg4)',fontFamily:'var(--sans)',fontSize:13,cursor:result?'pointer':'not-allowed',padding:'9px 16px',transition:'all 0.15s'}}
-                  onMouseEnter={e=>{if(result){e.currentTarget.style.borderColor='#4D9EFF';e.currentTarget.style.color='#4D9EFF';}}}
-                  onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border2)';e.currentTarget.style.color=result?'var(--muted)':'var(--bg4)';}}>
-                  {lbl}
+        {/* Dynamic Center Main Dashboard Workspace Layout Area — Transitions right padding beautifully when bot opens so controls remain visible without collision or overlap */}
+        <main className="main" style={{ transition: 'padding-right 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)', paddingRight: botOpen ? '540px' : '32px' }}>
+          <div className="main-inner">
+            
+            <div className="prompt-card">
+              <textarea value={prompt} onChange={e => setPrompt(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runPipeline(); }}
+                placeholder="Enter a prompt for GPT-2 to generate and fact-check…"
+                style={{ width: '100%', minHeight: 88, resize: 'vertical', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: 14, padding: '12px 14px', transition: 'border-color 0.15s', lineHeight: 1.6 }}
+                onFocus={e => e.target.style.borderColor = 'rgba(0,229,160,0.4)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                <button onClick={runPipeline} disabled={running}
+                  style={{ background: running ? 'var(--bg4)' : 'linear-gradient(135deg,#00E5A0,#4D9EFF)', border: 'none', borderRadius: 10, color: running ? 'var(--muted)' : '#000', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 8, boxShadow: running ? 'none' : '0 0 20px rgba(0,229,160,0.25)', transition: 'all 0.15s' }}>
+                  {running ? <div style={{ width: 13, height: 13, border: '2px solid var(--muted)', borderTopColor: '#00E5A0', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} /> : '▶'}
+                  {running ? statusMsg || 'Analyzing…' : 'Analyze'}
                 </button>
-              ))}
-              <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--mono)'}}>Ctrl+Enter to run</span>
-            </div>
-            {error&&<div style={{marginTop:10,fontSize:12,color:'#FF5C7A',fontFamily:'var(--mono)',whiteSpace:'pre-wrap',background:'rgba(255,92,122,0.08)',padding:'8px 12px',borderRadius:8,border:'1px solid rgba(255,92,122,0.2)'}}>{error}</div>}
-          </div>
-
-          {/* Score cards */}
-          {result&&(
-            <div className="fade-in" style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-              <ScoreCard label="BERTScore" score={result.avg_bertscore} icon="📊"/>
-              <ScoreCard label="NLI · DeBERTa" score={result.avg_nli} icon="🔍"/>
-              <ScoreCard label="Combined" score={result.avg_combined} icon="⚡"/>
-            </div>
-          )}
-
-          {/* Results card */}
-          {result&&(
-            <div className="fade-in" style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:16,overflow:'hidden'}}>
-              <div style={{display:'flex',borderBottom:'1px solid var(--border)',background:'var(--bg3)',padding:'0 4px',alignItems:'center'}}>
-                {['overview','sentences','samples'].map(t=>(
-                  <button key={t} onClick={()=>setActiveTab(t)}
-                    style={{padding:'12px 18px',fontSize:13,fontWeight:activeTab===t?600:400,color:activeTab===t?'#00E5A0':'var(--muted)',background:'none',border:'none',borderBottom:`2px solid ${activeTab===t?'#00E5A0':'transparent'}`,cursor:'pointer',marginBottom:-1,textTransform:'capitalize',transition:'all 0.15s',fontFamily:'var(--sans)'}}>
-                    {t}
+                {[['↓ Export JSON', exportJSON], ['↓ Export CSV', exportCSV]].map(([lbl, fn]) => (
+                  <button key={lbl} onClick={fn} disabled={!result}
+                    style={{ background: 'transparent', border: '1px solid var(--border2)', borderRadius: 10, color: result ? 'var(--muted)' : 'var(--bg4)', fontFamily: 'var(--sans)', fontSize: 13, cursor: result ? 'pointer' : 'not-allowed', padding: '9px 16px', transition: 'all 0.15s' }}
+                    onMouseEnter={e => { if (result) { e.currentTarget.style.borderColor = '#4D9EFF'; e.currentTarget.style.color = '#4D9EFF'; } }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border2)'; e.currentTarget.style.color = result ? 'var(--muted)' : 'var(--bg4)'; }}>
+                    {lbl}
                   </button>
                 ))}
-                <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:16,padding:'0 16px',fontSize:11,fontFamily:'var(--mono)',color:'var(--muted)'}}>
-                  <span>{result.sentences?.length} sentences</span>
-                  <span>{result.n_samples} samples</span>
-                  <span style={{color:'#00E5A0'}}>{result.device}</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>Ctrl+Enter to run</span>
+              </div>
+              {error && <div style={{ marginTop: 10, fontSize: 12, color: '#FF5C7A', fontFamily: 'var(--mono)', whiteSpace: 'pre-wrap', background: 'rgba(255,92,122,0.08)', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(255,92,122,0.2)' }}>{error}</div>}
+            </div>
+
+            {result && (
+              <div className="score-row fade-in" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <ScoreCard label="BERTScore" score={result.avg_bertscore} icon="📊" />
+                <ScoreCard label="NLI · DeBERTa" score={result.avg_nli} icon="🔍" />
+                <ScoreCard label="Combined" score={result.avg_combined} icon="⚡" />
+              </div>
+            )}
+
+            {result && (
+              <div className="results-card fade-in" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg3)', padding: '0 4px', alignItems: 'center' }}>
+                  {['overview', 'sentences', 'samples'].map(t => (
+                    <button key={t} onClick={() => setActiveTab(t)}
+                      style={{ padding: '12px 18px', fontSize: 13, fontWeight: activeTab === t ? 600 : 400, color: activeTab === t ? '#00E5A0' : 'var(--muted)', background: 'none', border: 'none', borderBottom: `2px solid ${activeTab === t ? '#00E5A0' : 'transparent'}`, cursor: 'pointer', marginBottom: -1, textTransform: 'capitalize', transition: 'all 0.15s', fontFamily: 'var(--sans)' }}>
+                      {t}
+                    </button>
+                  ))}
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--muted)' }}>
+                    <span>{result.sentences?.length} sentences</span>
+                    <span>{result.n_samples} samples</span>
+                    <span style={{ color: '#00E5A0' }}>{result.device}</span>
+                  </div>
+                </div>
+                <div style={{ padding: '20px 22px' }}>
+                  {activeTab === 'overview' && (
+                    <div>
+                      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                        {[['Flagged (BERT)', (result.scores_bertscore || []).filter(s => s >= 0.5).length], ['Flagged (NLI)', (result.scores_nli || []).filter(s => s >= 0.5).length], ['Total sentences', result.sentences?.length], ['Samples used', result.n_samples]].map(([lbl, val]) => (
+                          <div key={lbl} style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', minWidth: 110 }}>
+                            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)', marginBottom: 4 }}>{lbl}</div>
+                            <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--mono)', color: typeof val === 'number' && lbl.includes('Flag') && val > 0 ? '#FF5C7A' : 'var(--text)' }}>{val}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <HighlightedResponse sentenceResults={result.sentence_results} />
+                    </div>
+                  )}
+                  {activeTab === 'sentences' && <SentenceTable sentenceResults={result.sentence_results} />}
+                  {activeTab === 'samples' && <SamplesView samples={result.samples} />}
                 </div>
               </div>
-              <div style={{padding:'20px 22px'}}>
-                {activeTab==='overview'&&(
-                  <div>
-                    <div style={{display:'flex',gap:10,marginBottom:20,flexWrap:'wrap'}}>
-                      {[['Flagged (BERT)',(result.scores_bertscore||[]).filter(s=>s>=0.5).length],['Flagged (NLI)',(result.scores_nli||[]).filter(s=>s>=0.5).length],['Total sentences',result.sentences?.length],['Samples used',result.n_samples]].map(([lbl,val])=>(
-                        <div key={lbl} style={{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 14px',minWidth:110}}>
-                          <div style={{fontSize:10,fontFamily:'var(--mono)',textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--muted)',marginBottom:4}}>{lbl}</div>
-                          <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--mono)',color:typeof val==='number'&&lbl.includes('Flag')&&val>0?'#FF5C7A':'var(--text)'}}>{val}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <HighlightedResponse sentenceResults={result.sentence_results}/>
-                  </div>
-                )}
-                {activeTab==='sentences'&&<SentenceTable sentenceResults={result.sentence_results}/>}
-                {activeTab==='samples'&&<SamplesView samples={result.samples}/>}
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Empty state */}
-          {!result&&!running&&(
-            <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'80px 0',gap:16,color:'var(--muted)'}}>
-              <div style={{width:72,height:72,borderRadius:20,background:'var(--bg2)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,boxShadow:'0 0 40px rgba(0,229,160,0.08)'}}>🛡️</div>
-              <div style={{fontSize:18,fontWeight:600,color:'var(--text)'}}>Ready to detect hallucinations</div>
-              <div style={{fontSize:13,color:'var(--muted)',textAlign:'center',maxWidth:420,lineHeight:1.8}}>Enter a prompt above and press <span style={{fontFamily:'var(--mono)',background:'var(--bg3)',padding:'1px 6px',borderRadius:4,border:'1px solid var(--border2)'}}>Ctrl+Enter</span> or click Analyze. GPT-2 Medium generates a response, then SelfCheckGPT scores every sentence for consistency.</div>
-            </div>
-          )}
+            {!result && !running && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', gap: 16, color: 'var(--muted)' }}>
+                <div style={{ width: 72, height: 72, borderRadius: 20, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, boxShadow: '0 0 40px rgba(0,229,160,0.08)' }}>🛡️</div>
+                <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>Ready to detect hallucinations</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', maxWidth: 420, lineHeight: 1.8 }}>Enter a prompt above and press <span style={{ fontFamily: 'var(--mono)', background: 'var(--bg3)', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border2)' }}>Ctrl+Enter</span> or click Analyze. GPT-2 Medium generates a response, then SelfCheckGPT scores every sentence for consistency.</div>
+              </div>
+            )}
+          </div>
         </main>
       </div>
+
+      {/* 🤖 Fully Fixed Click-Active Pure React Help Desk Assistant Interface */}
+      <button className="bot-fab" onClick={() => setBotOpen(!botOpen)} title="Ask HalluciBot">🤖</button>
+      <div className={`bot-panel ${botOpen ? 'open' : ''}`}>
+        <div className="bot-header">
+          <span>🤖 HalluciBot — Help Desk</span>
+          <button className="bot-close" onClick={() => setBotOpen(false)}>×</button>
+        </div>
+        <div className="bot-messages">
+          {messages.map((msg, i) => (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+              <div className={`bot-msg ${msg.role}`} dangerouslySetInnerHTML={{ __html: msg.text }} />
+              {msg.follow && msg.follow.length > 0 && (
+                <div className="bot-followups">
+                  {msg.follow.map((f, j) => (
+                    <button key={j} className="bot-chip" onClick={() => handleBotAsk(f)}>{f}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={msgEndRef} />
+        </div>
+        <div className="bot-input-row">
+          <input value={botInput} onChange={e => setBotInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleSendInput(); }} placeholder="Message HalluciBot..." />
+          <button onClick={handleSendInput} title="Send Message">➤</button>
+        </div>
+      </div>
+
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
